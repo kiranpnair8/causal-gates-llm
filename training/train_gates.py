@@ -168,7 +168,10 @@ def main():
     )
 
     lambda_sparsity = config["loss"]["lambda_sparsity"]
+    lambda_causal = float(config["causal"]["lambda_causal"])
     grad_accum_steps = config["training"]["grad_accum_steps"]
+    max_steps = int(config["training"].get("max_steps", 1000))
+    log_every = int(config.get("logging", {}).get("log_every", 50))
 
     optimizer.zero_grad()
 
@@ -176,12 +179,6 @@ def main():
 
     for step, batch in enumerate(tqdm(loader)):
         batch = {k: v.to(model.device) for k, v in batch.items()}
-
-        #outputs = model(**batch)
-        #lm_loss = outputs.loss
-
-        #sparse_loss = gate_sparsity_loss(model)
-        #loss = lm_loss + lambda_sparsity * sparse_loss
 
         clear_intervention()
 
@@ -207,16 +204,17 @@ def main():
 
         sparse_loss = gate_sparsity_loss(model)
 
+        # Diagnostic gate-only objective: keep LM loss logged, but do not let it pin gates open.
         loss = (
-            lm_loss
-            + lambda_sparsity * sparse_loss
-            + float(config["causal"]["lambda_causal"]) * causal_loss
+            lambda_sparsity * sparse_loss
+            + lambda_causal * causal_loss
         )
 
         if torch.isnan(loss) or torch.isinf(loss):
             print("NaN/Inf detected")
             print("lm_loss:", lm_loss)
             print("sparse_loss:", sparse_loss)
+            print("causal_loss:", causal_loss)
             break
 
         loss = loss / grad_accum_steps
@@ -243,7 +241,7 @@ def main():
             optimizer.step()
             optimizer.zero_grad()
 
-        if step % 50 == 0:
+        if step % log_every == 0:
             print(
                 f"step={step} "
                 f"lm_loss={lm_loss.item():.4f} "
@@ -257,7 +255,7 @@ def main():
                 f"grad_norm={avg_gate_grad_norm:.8f}"
             )
 
-        if step >= 1000:
+        if step >= max_steps:
             break
 
     model.save_pretrained("outputs/tinyllama_gated")
