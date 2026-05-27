@@ -167,6 +167,7 @@ def main():
         eps=float(config["training"].get("adam_eps", 1e-6)),
     )
 
+    lambda_lm = float(config["loss"].get("lambda_lm", 0.0))
     lambda_sparsity = config["loss"]["lambda_sparsity"]
     lambda_causal = float(config["causal"]["lambda_causal"])
     grad_accum_steps = config["training"]["grad_accum_steps"]
@@ -204,9 +205,10 @@ def main():
 
         sparse_loss = gate_sparsity_loss(model)
 
-        # Diagnostic gate-only objective: keep LM loss logged, but do not let it pin gates open.
+        # Small LM weight tests whether causal separation survives quality pressure.
         loss = (
-            lambda_sparsity * sparse_loss
+            lambda_lm * lm_loss
+            + lambda_sparsity * sparse_loss
             + lambda_causal * causal_loss
         )
 
