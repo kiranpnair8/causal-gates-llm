@@ -1,0 +1,41 @@
+model:
+  name: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+  torch_dtype: "float16"
+
+gate:
+  hidden_size: 2048
+  gate_type: "scalar"
+  init_bias: 2.0
+  init_std: 0.001
+  temperature: 1.0
+
+training:
+  batch_size: 1
+  grad_accum_steps: 8
+  learning_rate: 0.0001
+  weight_decay: 0.0
+  max_steps: 50
+  max_grad_norm: 1.0
+
+loss:
+  lambda_sparsity: 0.001
+
+causal:
+  lambda_causal: 1.0
+  delta_alpha: 10.0
+  lambda_rank: 5.0
+  rank_margin: 0.2
+
+data:
+  dataset_name: "wikitext"
+  dataset_config: "wikitext-2-raw-v1"
+  split: "train"
+  max_length: 512
+
+system:
+  device_map: "auto"
+  seed: 42
+
+logging:
+  log_every: 50
+  save_dir: "outputs/tinyllama_gated"

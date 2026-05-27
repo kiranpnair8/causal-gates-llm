@@ -1,0 +1,11 @@
+outputs/
+*.safetensors
+__pycache__/
+*/__pycache__/
+hf_cache/
+envs/
+conda_pkgs/
+pip_cache/
+*.pt
+*.pth
+*.bin
