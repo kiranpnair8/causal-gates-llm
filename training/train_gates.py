@@ -124,6 +124,20 @@ def compute_kl_delta(original_logits, intervened_logits):
 
     return kl.detach()
 
+
+def compute_gate_target_corr(gates, targets):
+    gates = gates.detach().float()
+    targets = targets.detach().float()
+
+    centered_gates = gates - gates.mean()
+    centered_targets = targets - targets.mean()
+    denom = centered_gates.norm() * centered_targets.norm()
+
+    if denom.item() <= 1e-8:
+        return 0.0
+
+    return float((centered_gates * centered_targets).sum() / denom)
+
 ## Intervention Helper Functions end
 
 
@@ -205,7 +219,6 @@ def main():
 
         sparse_loss = gate_sparsity_loss(model)
 
-        # Small LM weight tests whether causal separation survives quality pressure.
         loss = (
             lambda_lm * lm_loss
             + lambda_sparsity * sparse_loss
@@ -244,6 +257,9 @@ def main():
             optimizer.zero_grad()
 
         if step % log_every == 0:
+            gate_range = float(gates.max() - gates.min())
+            gate_target_corr = compute_gate_target_corr(gates, targets)
+
             print(
                 f"step={step} "
                 f"lm_loss={lm_loss.item():.4f} "
@@ -251,9 +267,12 @@ def main():
                 f"causal_loss={float(causal_loss):.4f} "
                 f"delta_max={float(deltas.max()):.4f} "
                 f"delta_mean={float(deltas.mean()):.4f} "
+                f"target_mean={float(targets.mean()):.4f} "
                 f"gate_mean={float(gates.mean()):.4f} "
                 f"gate_min={float(gates.min()):.4f} "
                 f"gate_max={float(gates.max()):.4f} "
+                f"gate_range={gate_range:.4f} "
+                f"gate_target_corr={gate_target_corr:.4f} "
                 f"grad_norm={avg_gate_grad_norm:.8f}"
             )
 
