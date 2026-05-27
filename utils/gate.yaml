@@ -18,6 +18,7 @@ training:
   max_grad_norm: 1.0
 
 loss:
+  lambda_lm: 0.1
   lambda_sparsity: 0.001
 
 causal:
