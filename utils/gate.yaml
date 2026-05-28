@@ -36,7 +36,7 @@ data:
 
 system:
   device_map: "auto"
-  seed: 42
+  seed: 123
 
 logging:
   log_every: 50
