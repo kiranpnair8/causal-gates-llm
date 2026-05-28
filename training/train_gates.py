@@ -14,6 +14,14 @@ from utils.config import load_config
 
 config = load_config("utils/gate.yaml")
 
+def set_seed(seed):
+    random.seed(seed)
+    torch.manual_seed(seed)
+
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
 def tokenize_fn(example, tokenizer, max_length=config["data"]["max_length"]):
     return tokenizer(
         example["text"],
@@ -170,6 +178,10 @@ def compute_gate_target_corr(gates, targets):
 
 
 def main():
+    seed = int(config.get("system", {}).get("seed", 42))
+    set_seed(seed)
+    print(f"Using seed={seed}")
+
     model, tokenizer = load_tinyllama_with_gates(config)
 
     dataset = load_dataset(
