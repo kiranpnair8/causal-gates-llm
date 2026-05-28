@@ -184,6 +184,7 @@ def main():
     lambda_lm = float(config["loss"].get("lambda_lm", 0.0))
     lambda_sparsity = config["loss"]["lambda_sparsity"]
     lambda_causal = float(config["causal"]["lambda_causal"])
+    target_floor = float(config["causal"].get("target_floor", 0.0))
     grad_accum_steps = config["training"]["grad_accum_steps"]
     max_steps = int(config["training"].get("max_steps", 1000))
     log_every = int(config.get("logging", {}).get("log_every", 50))
@@ -207,7 +208,8 @@ def main():
             original_logits,
         )
 
-        targets = deltas / (deltas.max() + 1e-8)
+        normalized_targets = deltas / (deltas.max() + 1e-8)
+        targets = target_floor + (1.0 - target_floor) * normalized_targets
         targets = targets.to(model.device)
 
         gates = get_all_module_gates(model)
