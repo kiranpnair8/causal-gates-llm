@@ -59,6 +59,34 @@ def get_all_module_gates(model):
 
     return torch.stack(gates)
 
+
+def get_module_names(model):
+    names = []
+
+    for layer_idx in range(len(model.model.layers)):
+        names.append(f"L{layer_idx:02d}.attn")
+        names.append(f"L{layer_idx:02d}.mlp")
+
+    return names
+
+
+def print_gate_rankings(model, top_k=10):
+    gates = get_all_module_gates(model).detach().float().cpu()
+    module_names = get_module_names(model)
+    ranked = sorted(
+        zip(module_names, gates.tolist()),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+
+    print("\nTop learned gates:")
+    for name, value in ranked[:top_k]:
+        print(f"{name:8s} gate={value:.4f}")
+
+    print("\nLowest learned gates:")
+    for name, value in ranked[-top_k:]:
+        print(f"{name:8s} gate={value:.4f}")
+
 @torch.no_grad()
 def compute_module_delta(model, batch, original_logits, layer_idx, module):
     set_intervention(
@@ -280,6 +308,8 @@ def main():
 
         if step >= max_steps:
             break
+
+    print_gate_rankings(model)
 
     model.save_pretrained("outputs/tinyllama_gated")
     tokenizer.save_pretrained("outputs/tinyllama_gated")
