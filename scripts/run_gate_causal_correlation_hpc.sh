@@ -27,7 +27,7 @@ fi
 
 conda activate /home/rizk_lab/shared/kiran_m2dn/envs/env_gate
 
-python analysis/gate_causal_correlation.py \
+python -m analysis.gate_causal_correlation \
     --checkpoint-dir outputs/tinyllama_gated \
     --num-samples 8 \
     --top-k 10 \
