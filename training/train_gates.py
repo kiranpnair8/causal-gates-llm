@@ -141,11 +141,36 @@ def compute_all_module_deltas(model, batch, original_logits):
 
     return torch.stack(deltas)
 
-def causal_ranking_loss(delta_a, delta_b, gate_a, gate_b, margin=0.05):
-    if delta_a > delta_b:
-        return torch.relu(margin - (gate_a - gate_b))
-    else:
-        return torch.relu(margin - (gate_b - gate_a))
+
+def causal_ranking_loss(gates, targets, margin=0.05, num_pairs=128):
+    gates = gates.float()
+    targets = targets.detach().float()
+    num_modules = gates.shape[0]
+
+    idx_a = torch.randint(
+        0,
+        num_modules,
+        (num_pairs,),
+        device=gates.device,
+    )
+    idx_b = torch.randint(
+        0,
+        num_modules,
+        (num_pairs,),
+        device=gates.device,
+    )
+
+    target_diff = targets[idx_a] - targets[idx_b]
+    gate_diff = gates[idx_a] - gates[idx_b]
+    non_tied = target_diff.abs() > 1e-6
+
+    if non_tied.sum().item() == 0:
+        return gates.new_tensor(0.0)
+
+    signs = target_diff[non_tied].sign()
+    ordered_gate_diff = signs * gate_diff[non_tied]
+
+    return F.relu(margin - ordered_gate_diff).mean()
 
 
 def compute_kl_delta(original_logits, intervened_logits):
@@ -227,6 +252,10 @@ def main():
     target_floor = float(config["causal"].get("target_floor", 0.0))
     use_ema_targets = bool(config["causal"].get("use_ema_targets", False))
     ema_beta = float(config["causal"].get("ema_beta", 0.9))
+    use_rank_loss = bool(config["causal"].get("use_rank_loss", False))
+    lambda_rank = float(config["causal"].get("lambda_rank", 0.0))
+    rank_margin = float(config["causal"].get("rank_margin", 0.05))
+    rank_pairs = int(config["causal"].get("rank_pairs", 128))
     grad_accum_steps = config["training"]["grad_accum_steps"]
     max_steps = int(config["training"].get("max_steps", 1000))
     log_every = int(config.get("logging", {}).get("log_every", 50))
@@ -272,12 +301,23 @@ def main():
             targets.float(),
         )
 
+        if use_rank_loss:
+            rank_loss = causal_ranking_loss(
+                gates,
+                targets,
+                margin=rank_margin,
+                num_pairs=rank_pairs,
+            )
+        else:
+            rank_loss = gates.new_tensor(0.0)
+
         sparse_loss = gate_sparsity_loss(model)
 
         loss = (
             lambda_lm * lm_loss
             + lambda_sparsity * sparse_loss
             + lambda_causal * causal_loss
+            + lambda_rank * rank_loss
         )
 
         if torch.isnan(loss) or torch.isinf(loss):
@@ -285,6 +325,7 @@ def main():
             print("lm_loss:", lm_loss)
             print("sparse_loss:", sparse_loss)
             print("causal_loss:", causal_loss)
+            print("rank_loss:", rank_loss)
             break
 
         loss = loss / grad_accum_steps
@@ -321,6 +362,7 @@ def main():
                 f"lm_loss={lm_loss.item():.4f} "
                 f"sparsity={float(sparse_loss):.4f} "
                 f"causal_loss={float(causal_loss):.4f} "
+                f"rank_loss={float(rank_loss):.4f} "
                 f"delta_max={float(deltas.max()):.4f} "
                 f"delta_mean={float(deltas.mean()):.4f} "
                 f"target_mean={float(current_targets.mean()):.4f} "
