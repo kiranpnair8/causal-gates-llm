@@ -26,9 +26,11 @@ causal:
   target_floor: 0.25
   use_ema_targets: true
   ema_beta: 0.9
+  use_rank_loss: true
+  lambda_rank: 1.0
+  rank_margin: 0.05
+  rank_pairs: 128
   delta_alpha: 10.0
-  lambda_rank: 5.0
-  rank_margin: 0.2
 
 data:
   dataset_name: "wikitext"
