@@ -6,6 +6,28 @@ from pathlib import Path
 
 METRIC_RE = re.compile(r"(\w+)=([^\s]+)")
 GATE_RE = re.compile(r"^(L\d{2}\.(?:attn|mlp))\s+gate=([0-9.]+)")
+SEED_RE = re.compile(r"Using seed=(\d+)")
+
+
+def expand_log_paths(paths):
+    expanded = []
+
+    for raw_path in paths:
+        path = Path(raw_path)
+
+        if path.is_dir():
+            expanded.extend(sorted(path.glob("*.out")))
+        elif path.exists():
+            expanded.append(path)
+        else:
+            raise FileNotFoundError(
+                f"Could not find {path}. Pass the real .out filename, a glob expanded by the shell, or a directory like logs/."
+            )
+
+    if not expanded:
+        raise FileNotFoundError("No .out logs found to compare.")
+
+    return expanded
 
 
 def parse_step_metrics(line):
@@ -25,6 +47,7 @@ def parse_step_metrics(line):
 
 def parse_log(path):
     path = Path(path)
+    seed = None
     final_metrics = None
     top_gates = []
     low_gates = []
@@ -33,6 +56,11 @@ def parse_log(path):
     with path.open("r", encoding="utf-8") as f:
         for raw_line in f:
             line = raw_line.strip()
+
+            seed_match = SEED_RE.search(line)
+            if seed_match:
+                seed = int(seed_match.group(1))
+                continue
 
             if line.startswith("step="):
                 final_metrics = parse_step_metrics(line)
@@ -59,9 +87,12 @@ def parse_log(path):
     if final_metrics is None:
         raise ValueError(f"No step metrics found in {path}")
 
+    name = f"seed{seed}" if seed is not None else path.stem
+
     return {
-        "name": path.stem,
+        "name": name,
         "path": str(path),
+        "seed": seed,
         "metrics": final_metrics,
         "top_gates": top_gates,
         "low_gates": low_gates,
@@ -128,7 +159,7 @@ def write_gate_csv(runs, output_path):
     with output_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
             f,
-            fieldnames=["run", "rank_group", "rank", "module", "gate"],
+            fieldnames=["run", "seed", "rank_group", "rank", "module", "gate"],
         )
         writer.writeheader()
 
@@ -138,6 +169,7 @@ def write_gate_csv(runs, output_path):
                     writer.writerow(
                         {
                             "run": run["name"],
+                            "seed": "" if run["seed"] is None else run["seed"],
                             "rank_group": group_name,
                             "rank": rank,
                             "module": module,
@@ -150,7 +182,11 @@ def main():
     parser = argparse.ArgumentParser(
         description="Compare learned causal gate rankings across seed run logs."
     )
-    parser.add_argument("logs", nargs="+", help="Paths to SLURM .out logs")
+    parser.add_argument(
+        "logs",
+        nargs="+",
+        help="Paths to SLURM .out logs, shell-expanded globs, or directories containing .out logs",
+    )
     parser.add_argument(
         "--csv",
         default=None,
@@ -158,7 +194,8 @@ def main():
     )
     args = parser.parse_args()
 
-    runs = [parse_log(path) for path in args.logs]
+    log_paths = expand_log_paths(args.logs)
+    runs = [parse_log(path) for path in log_paths]
 
     print_metric_table(runs)
     print_overlap_table(runs, "top_gates", "Top Gate Overlap")
