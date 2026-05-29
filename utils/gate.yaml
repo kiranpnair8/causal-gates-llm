@@ -24,6 +24,8 @@ loss:
 causal:
   lambda_causal: 10.0
   target_floor: 0.25
+  use_ema_targets: true
+  ema_beta: 0.9
   delta_alpha: 10.0
   lambda_rank: 5.0
   rank_margin: 0.2
