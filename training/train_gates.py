@@ -225,6 +225,8 @@ def main():
     lambda_sparsity = config["loss"]["lambda_sparsity"]
     lambda_causal = float(config["causal"]["lambda_causal"])
     target_floor = float(config["causal"].get("target_floor", 0.0))
+    use_ema_targets = bool(config["causal"].get("use_ema_targets", False))
+    ema_beta = float(config["causal"].get("ema_beta", 0.9))
     grad_accum_steps = config["training"]["grad_accum_steps"]
     max_steps = int(config["training"].get("max_steps", 1000))
     log_every = int(config.get("logging", {}).get("log_every", 50))
@@ -232,6 +234,7 @@ def main():
     optimizer.zero_grad()
 
     avg_gate_grad_norm = 0.0
+    ema_targets = None
 
     for step, batch in enumerate(tqdm(loader)):
         batch = {k: v.to(model.device) for k, v in batch.items()}
@@ -249,8 +252,18 @@ def main():
         )
 
         normalized_targets = deltas / (deltas.max() + 1e-8)
-        targets = target_floor + (1.0 - target_floor) * normalized_targets
-        targets = targets.to(model.device)
+        current_targets = target_floor + (1.0 - target_floor) * normalized_targets
+        current_targets = current_targets.to(model.device)
+
+        if use_ema_targets:
+            if ema_targets is None:
+                ema_targets = current_targets.detach().clone()
+            else:
+                ema_targets.mul_(ema_beta).add_(current_targets.detach(), alpha=1.0 - ema_beta)
+
+            targets = ema_targets.detach()
+        else:
+            targets = current_targets
 
         gates = get_all_module_gates(model)
 
@@ -301,6 +314,7 @@ def main():
         if step % log_every == 0:
             gate_range = float(gates.max() - gates.min())
             gate_target_corr = compute_gate_target_corr(gates, targets)
+            ema_target_mean = float(targets.mean()) if use_ema_targets else float("nan")
 
             print(
                 f"step={step} "
@@ -309,7 +323,8 @@ def main():
                 f"causal_loss={float(causal_loss):.4f} "
                 f"delta_max={float(deltas.max()):.4f} "
                 f"delta_mean={float(deltas.mean()):.4f} "
-                f"target_mean={float(targets.mean()):.4f} "
+                f"target_mean={float(current_targets.mean()):.4f} "
+                f"ema_target_mean={ema_target_mean:.4f} "
                 f"gate_mean={float(gates.mean()):.4f} "
                 f"gate_min={float(gates.min()):.4f} "
                 f"gate_max={float(gates.max()):.4f} "
