@@ -183,6 +183,19 @@ def make_row(policy, keep_ratio, kept_indices, mean_nll, ppl, module_names):
     }
 
 
+def make_average_row(policy, keep_ratio, keep_count, num_modules, mean_nll, ppl):
+    return {
+        "policy": policy,
+        "keep_ratio": keep_ratio,
+        "kept_modules": keep_count,
+        "skipped_modules": num_modules - keep_count,
+        "mean_nll": mean_nll,
+        "ppl": ppl,
+        "kept_module_names": "",
+        "skipped_module_names": "",
+    }
+
+
 def write_csv(rows, output_path):
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -329,13 +342,13 @@ def main():
             avg_nll = sum(random_nlls) / len(random_nlls)
             avg_ppl = sum(random_ppls) / len(random_ppls)
             rows.append(
-                make_row(
+                make_average_row(
                     "random_binary_avg",
                     keep_count / num_modules,
-                    set(),
+                    keep_count,
+                    num_modules,
                     avg_nll,
                     avg_ppl,
-                    module_names,
                 )
             )
 
