@@ -6,6 +6,8 @@ hf_cache/
 envs/
 conda_pkgs/
 pip_cache/
+checkpoints/
+logs/
 *.pt
 *.pth
 *.bin
