@@ -376,7 +376,7 @@ def evaluate_multiple_choice(model, tokenizer, dataset_name, num_samples, max_le
     if dataset_name == "hellaswag":
         dataset = load_dataset("hellaswag", split="validation")
     elif dataset_name == "piqa":
-        dataset = load_dataset("piqa", split="validation")
+        dataset = load_dataset("piqa", split="validation", trust_remote_code=True)
     elif dataset_name == "commonsense_qa":
         dataset = load_dataset("commonsense_qa", split="validation")
     else:
