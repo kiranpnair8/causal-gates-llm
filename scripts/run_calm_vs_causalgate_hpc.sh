@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=calm-vs-cg
-#SBATCH --output=logs/calm_vs_causalgate_%j.out
-#SBATCH --error=logs/calm_vs_causalgate_%j.err
-#SBATCH --time=04:00:00
+#SBATCH --job-name=mod-calm-cg
+#SBATCH --output=logs/mod_calm_causalgate_%j.out
+#SBATCH --error=logs/mod_calm_causalgate_%j.err
+#SBATCH --time=08:00:00
 #SBATCH --partition=gpu
 #SBATCH --nodelist=gpu004
 #SBATCH --gres=gpu:1
@@ -33,6 +33,8 @@ python scripts/eval_calm_vs_causalgate.py \
     --calibration-samples 32 \
     --wikitext-samples 128 \
     --hellaswag-samples 256 \
+    --piqa-samples 256 \
+    --commonsenseqa-samples 256 \
     --max-length 512 \
     --seed 123 \
     --output-csv outputs/calm_causalgate_tradeoff_wikitext_hellaswag.csv
