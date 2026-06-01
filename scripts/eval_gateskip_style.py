@@ -11,20 +11,12 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from datasets import load_dataset
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, DataCollatorForLanguageModeling
 
 from utils.config import load_config
-
-
-DATASET_ALIASES = {
-    "hellaswag": "hellaswag",
-    "piqa": "piqa",
-    "commonsense_qa": "commonsense_qa",
-}
 
 
 def set_seed(seed):
@@ -88,6 +80,8 @@ class GateSkipBranchWrapper(nn.Module):
         return gated_output
 
     def _record_gate_values(self, gate_value):
+        if not torch.is_grad_enabled():
+            return
         valid_mask = self._valid_mask(gate_value.shape[:2], gate_value.device)
         valid_gates = gate_value.squeeze(-1)[valid_mask]
         if valid_gates.numel() > 0:
@@ -116,7 +110,6 @@ class GateSkipBranchWrapper(nn.Module):
         threshold = torch.topk(valid_scores, k=skip_count, largest=False).values.max()
         skip_mask = (token_importance <= threshold) & valid_mask
 
-        # Ties at the threshold can skip slightly too many tokens; trim to the exact target.
         actual_skip = int(skip_mask.sum().item())
         if actual_skip > skip_count:
             valid_positions = valid_mask.flatten().nonzero(as_tuple=False).squeeze(-1)
