@@ -116,6 +116,36 @@ def load_gate_checkpoint(model, checkpoint_dir):
     print(f"Ignored missing backbone keys: {len(missing)}; unexpected keys: {len(unexpected)}")
 
 
+def load_causal_delta_ranking(path, module_names):
+    path = Path(path)
+
+    if not path.exists():
+        raise FileNotFoundError(f"Causal delta CSV not found: {path}")
+
+    module_to_idx = {name: idx for idx, name in enumerate(module_names)}
+    rows = []
+
+    with path.open("r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+
+        if "module" not in reader.fieldnames or "delta" not in reader.fieldnames:
+            raise ValueError(f"{path} must contain module and delta columns")
+
+        for row in reader:
+            module = row["module"]
+            if module not in module_to_idx:
+                continue
+
+            rows.append((module_to_idx[module], float(row["delta"])))
+
+    if len(rows) != len(module_names):
+        raise ValueError(
+            f"Expected {len(module_names)} module deltas in {path}, found {len(rows)}"
+        )
+
+    return [idx for idx, _ in sorted(rows, key=lambda item: item[1], reverse=True)]
+
+
 def build_loader(config, tokenizer, num_samples):
     dataset = load_dataset(
         config["data"]["dataset_name"],
@@ -250,6 +280,11 @@ def main():
     parser.add_argument("--random-trials", type=int, default=5)
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument(
+        "--causal-delta-csv",
+        default="outputs/gate_causal_correlation.csv",
+        help="Optional CSV with module and delta columns for causal-delta top-k baseline",
+    )
+    parser.add_argument(
         "--output-csv",
         default="outputs/gate_topk_ppl.csv",
         help="Where to save PPL results",
@@ -267,11 +302,19 @@ def main():
     num_modules = len(module_names)
     trained_logits = get_gate_logits(model)
     learned_gate_values = get_gate_values(model)
-    ranked_indices = sorted(
+    gate_ranked_indices = sorted(
         range(num_modules),
         key=lambda idx: learned_gate_values[idx],
         reverse=True,
     )
+    causal_ranked_indices = None
+
+    if args.causal_delta_csv:
+        causal_ranked_indices = load_causal_delta_ranking(
+            args.causal_delta_csv,
+            module_names,
+        )
+        print(f"Loaded causal-delta ranking from {args.causal_delta_csv}")
 
     rows = []
 
@@ -303,8 +346,8 @@ def main():
 
     for keep_ratio in args.keep_ratios:
         keep_count = max(1, min(num_modules, round(num_modules * keep_ratio)))
-        kept_indices = set(ranked_indices[:keep_count])
 
+        kept_indices = set(gate_ranked_indices[:keep_count])
         apply_binary_gate_mask(model, kept_indices)
         mean_nll, ppl = evaluate_ppl(model, loader)
         rows.append(
@@ -317,6 +360,21 @@ def main():
                 module_names,
             )
         )
+
+        if causal_ranked_indices is not None:
+            kept_indices = set(causal_ranked_indices[:keep_count])
+            apply_binary_gate_mask(model, kept_indices)
+            mean_nll, ppl = evaluate_ppl(model, loader)
+            rows.append(
+                make_row(
+                    "causal_delta_topk_binary",
+                    keep_count / num_modules,
+                    kept_indices,
+                    mean_nll,
+                    ppl,
+                    module_names,
+                )
+            )
 
         if keep_count < num_modules:
             random_nlls = []
