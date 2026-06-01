@@ -55,7 +55,7 @@ class GateSkipBranchWrapper(nn.Module):
     def __init__(self, original_module, parent_model, module_name, hidden_size, init_bias, init_std):
         super().__init__()
         self.original_module = original_module
-        self.parent_model = parent_model
+        object.__setattr__(self, "parent_model", parent_model)
         self.module_name = module_name
         self.gate = nn.Linear(hidden_size, 1)
         nn.init.normal_(self.gate.weight, mean=0.0, std=init_std)
