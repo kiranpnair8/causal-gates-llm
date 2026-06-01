@@ -33,4 +33,5 @@ python -m analysis.evaluate_gate_topk_ppl \
     --keep-ratios 1.0 0.75 0.5 0.25 \
     --random-trials 5 \
     --seed 123 \
+    --causal-delta-csv outputs/gate_causal_correlation.csv \
     --output-csv outputs/gate_topk_ppl.csv
