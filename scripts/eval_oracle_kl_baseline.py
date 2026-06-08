@@ -191,27 +191,26 @@ def load_saved_kl_ranking(path, module_names):
 
 
 def find_or_compute_kl_ranking(model, calibration_loader, module_names, args):
+    if args.recompute_kl:
+        ranking = compute_oracle_kl_ranking(model, calibration_loader, module_names)
+        write_kl_ranking_csv(ranking, args.oracle_output_csv)
+        print(f"Saved recomputed Oracle-KL ranking to {args.oracle_output_csv}")
+        return ranking
+
     if args.kl_ranking_csv:
         ranking = load_saved_kl_ranking(args.kl_ranking_csv, module_names)
         if ranking is not None:
             return ranking
-        if not args.recompute_kl:
-            raise FileNotFoundError(f"Could not load KL ranking from {args.kl_ranking_csv}")
+        raise FileNotFoundError(f"Could not load KL ranking from {args.kl_ranking_csv}")
 
     for candidate in RANKING_CANDIDATES:
         ranking = load_saved_kl_ranking(candidate, module_names)
         if ranking is not None:
             return ranking
 
-    if not args.recompute_kl:
-        raise FileNotFoundError(
-            "No saved KL ranking found. Rerun with --recompute-kl to compute outputs/oracle_kl_module_ranking.csv"
-        )
-
-    ranking = compute_oracle_kl_ranking(model, calibration_loader, module_names)
-    write_kl_ranking_csv(ranking, args.oracle_output_csv)
-    print(f"Saved recomputed Oracle-KL ranking to {args.oracle_output_csv}")
-    return ranking
+    raise FileNotFoundError(
+        "No saved KL ranking found. Rerun with --recompute-kl to compute outputs/oracle_kl_module_ranking.csv"
+    )
 
 
 def write_kl_ranking_csv(ranking, output_path):
