@@ -63,6 +63,15 @@ def get_gate_values(model):
     return [float(gate.gate_values_scalar().detach().float().cpu()) for gate in iter_gate_modules(model)]
 
 
+def get_gate_logits(model):
+    return [gate.gate_logit.detach().clone() for gate in iter_gate_modules(model)]
+
+
+def restore_gate_logits(model, logits):
+    for gate, logit in zip(iter_gate_modules(model), logits):
+        gate.gate_logit.data.copy_(logit.to(gate.gate_logit.device))
+
+
 def apply_binary_gate_mask(model, kept_indices):
     kept_indices = set(kept_indices)
     for idx, gate in enumerate(iter_gate_modules(model)):
@@ -392,6 +401,7 @@ def main():
 
     model, tokenizer = load_tinyllama_with_gates(config)
     load_gate_checkpoint(model, args.checkpoint_dir)
+    trained_gate_logits = get_gate_logits(model)
     model.eval()
 
     split = config["data"].get("eval_split", "test")
@@ -403,6 +413,7 @@ def main():
     module_to_idx = {name: idx for idx, name in enumerate(module_names)}
 
     kl_ranking = find_or_compute_kl_ranking(model, calibration_loader, module_names, args)
+    restore_gate_logits(model, trained_gate_logits)
     write_kl_ranking_csv(kl_ranking, args.oracle_output_csv)
     print_full_kl_ranking(kl_ranking)
 
