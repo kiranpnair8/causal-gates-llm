@@ -108,7 +108,7 @@ def add_highlights(ax, rows, matrix, use_log_values=False):
                 1,
                 fill=False,
                 edgecolor="black",
-                linewidth=2.0,
+                linewidth=3.0,
             )
         )
 
@@ -120,23 +120,21 @@ def add_highlights(ax, rows, matrix, use_log_values=False):
                 1,
                 1,
                 fill=False,
-                edgecolor="black",
-                linewidth=1.8,
-                linestyle="--",
+                edgecolor="red",
+                linewidth=3.0,
             )
         )
 
     top_patch = patches.Patch(
         facecolor="none",
         edgecolor="black",
-        linewidth=2.0,
+        linewidth=3.0,
         label="Top-5 Causally Important Modules",
     )
     bottom_patch = patches.Patch(
         facecolor="none",
-        edgecolor="black",
-        linewidth=1.8,
-        linestyle="--",
+        edgecolor="red",
+        linewidth=3.0,
         label="Bottom-5 Causally Important Modules",
     )
     ax.legend(
