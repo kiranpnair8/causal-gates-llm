@@ -62,85 +62,82 @@ def compute_metrics(rows, top_k=10):
         "spearman": spearman_rank,
         "top_overlap": len(top_by_gate & top_by_delta),
         "bottom_overlap": len(bottom_by_gate & bottom_by_delta),
-        "top_shared": sorted(top_by_gate & top_by_delta),
-        "bottom_shared": sorted(bottom_by_gate & bottom_by_delta),
     }
 
 
-def annotate_modules(ax, rows):
-    top5 = sorted(rows, key=lambda row: row["delta_rank"])[:5]
-    bottom5 = sorted(rows, key=lambda row: row["delta_rank"], reverse=True)[:5]
-
-    for row in top5:
-        ax.annotate(
-            row["module"],
-            xy=(row["delta_rank"], row["gate_rank"]),
-            xytext=(5, 5),
-            textcoords="offset points",
-            fontsize=8,
-            color="black",
-            arrowprops={"arrowstyle": "-", "color": "black", "linewidth": 0.6},
-        )
-
-    for row in bottom5:
-        ax.annotate(
-            row["module"],
-            xy=(row["delta_rank"], row["gate_rank"]),
-            xytext=(5, -9),
-            textcoords="offset points",
-            fontsize=8,
-            color="#b00000",
-            arrowprops={"arrowstyle": "-", "color": "#b00000", "linewidth": 0.6},
-        )
-
-
-def plot(rows, metrics, output_base):
+def plot_rank_heatmap(rows, metrics, output_base):
     plt.rcParams.update({
-        "font.size": 10,
+        "font.size": 9,
         "axes.titlesize": 13,
-        "axes.labelsize": 11,
-        "xtick.labelsize": 9,
-        "ytick.labelsize": 9,
-        "legend.fontsize": 9,
+        "axes.labelsize": 10,
+        "xtick.labelsize": 10,
+        "ytick.labelsize": 7,
     })
 
-    x = np.asarray([row["delta_rank"] for row in rows], dtype=float)
-    y = np.asarray([row["gate_rank"] for row in rows], dtype=float)
+    sorted_rows = sorted(rows, key=lambda row: row["delta_rank"])
+    matrix = np.asarray(
+        [[row["delta_rank"], row["gate_rank"]] for row in sorted_rows],
+        dtype=float,
+    )
+    modules = [row["module"] for row in sorted_rows]
+    max_rank = int(max(matrix.max(), 1))
 
-    fig, ax = plt.subplots(figsize=(6.2, 5.6))
-    ax.scatter(x, y, s=42, color="#2f6fbb", edgecolor="black", linewidth=0.4, alpha=0.9)
+    fig, ax = plt.subplots(figsize=(6, 10))
+    image = ax.imshow(matrix, cmap="viridis_r", vmin=1, vmax=max_rank, aspect="auto")
 
-    max_rank = int(max(x.max(), y.max()))
-    ax.plot([1, max_rank], [1, max_rank], linestyle="--", color="gray", linewidth=1.2, label="Perfect rank agreement")
+    cbar = fig.colorbar(image, ax=ax, fraction=0.045, pad=0.03)
+    cbar.set_label("Rank (1 = highest importance)", fontsize=9)
 
-    annotate_modules(ax, rows)
+    ax.set_title("Learned Gate Ranking vs. Causal KL Ranking", pad=52)
+    ax.set_xticks([0, 1])
+    ax.set_xticklabels(["KL Rank", "Gate Rank"], fontweight="bold")
+    ax.set_yticks(np.arange(len(modules)))
+    ax.set_yticklabels(modules)
 
-    ax.set_xlabel("Causal KL Rank")
-    ax.set_ylabel("Learned Gate Rank")
-    ax.set_title("Learned Gate Ranking vs. Causal Importance Ranking")
-    ax.set_xlim(0.5, max_rank + 0.5)
-    ax.set_ylim(max_rank + 0.5, 0.5)
-    ax.set_aspect("equal", adjustable="box")
-    ax.grid(True, linestyle=":", linewidth=0.6, alpha=0.6)
+    for idx, label in enumerate(ax.get_yticklabels()):
+        if idx < 10:
+            label.set_fontweight("bold")
+            label.set_color("#006400")
+        elif idx >= len(modules) - 10:
+            label.set_fontweight("bold")
+            label.set_color("#8b0000")
 
-    text = (
-        f"Pearson(gate, KL) = {metrics['pearson']:.3f}\n"
-        f"Spearman(ranks) = {metrics['spearman']:.3f}\n"
-        f"Top-10 overlap = {metrics['top_overlap']}/10\n"
+    ax.set_xticks(np.arange(-0.5, 2, 1), minor=True)
+    ax.set_yticks(np.arange(-0.5, len(modules), 1), minor=True)
+    ax.grid(which="minor", color="white", linestyle="-", linewidth=0.8)
+    ax.tick_params(which="minor", bottom=False, left=False)
+
+    for row_idx in range(matrix.shape[0]):
+        for col_idx in range(matrix.shape[1]):
+            value = int(round(matrix[row_idx, col_idx]))
+            ax.text(
+                col_idx,
+                row_idx,
+                str(value),
+                ha="center",
+                va="center",
+                fontsize=7,
+                color="white" if value < max_rank * 0.55 else "black",
+                fontweight="bold" if row_idx < 10 or row_idx >= len(modules) - 10 else "normal",
+            )
+
+    summary = (
+        f"Pearson(gate, KL) = {metrics['pearson']:.3f}    "
+        f"Spearman(rank) = {metrics['spearman']:.3f}    "
+        f"Top-10 overlap = {metrics['top_overlap']}/10    "
         f"Bottom-10 overlap = {metrics['bottom_overlap']}/10"
     )
     ax.text(
-        0.04,
-        0.96,
-        text,
+        0.5,
+        1.035,
+        summary,
         transform=ax.transAxes,
-        va="top",
-        ha="left",
+        ha="center",
+        va="bottom",
         fontsize=9,
-        bbox={"boxstyle": "round,pad=0.35", "facecolor": "white", "edgecolor": "#bbbbbb", "alpha": 0.92},
+        bbox={"boxstyle": "round,pad=0.35", "facecolor": "white", "edgecolor": "#bbbbbb", "alpha": 0.96},
     )
 
-    ax.legend(loc="lower right", frameon=False)
     fig.tight_layout()
     fig.savefig(f"{output_base}.png", dpi=300, bbox_inches="tight")
     fig.savefig(f"{output_base}.pdf", bbox_inches="tight")
@@ -148,7 +145,7 @@ def plot(rows, metrics, output_base):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Plot learned gate rank against causal KL rank.")
+    parser = argparse.ArgumentParser(description="Plot learned gate rank against causal KL rank as a heatmap.")
     parser.add_argument("--input-csv", default="outputs/gate_causal_correlation.csv")
     parser.add_argument("--figure-dir", default="figures")
     args = parser.parse_args()
@@ -158,8 +155,8 @@ def main():
 
     figure_dir = Path(args.figure_dir)
     figure_dir.mkdir(parents=True, exist_ok=True)
-    output_base = figure_dir / "gate_vs_causal_rank"
-    plot(rows, metrics, output_base)
+    output_base = figure_dir / "gate_rank_heatmap"
+    plot_rank_heatmap(rows, metrics, output_base)
 
     print(f"Pearson: {metrics['pearson']:.4f}")
     print(f"Spearman: {metrics['spearman']:.4f}")
