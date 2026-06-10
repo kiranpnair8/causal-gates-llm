@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=mod-calm-cg
-#SBATCH --output=logs/mod_calm_causalgate_%j.out
-#SBATCH --error=logs/mod_calm_causalgate_%j.err
+#SBATCH --job-name=calm-cg
+#SBATCH --output=logs/calm_causalgate_%j.out
+#SBATCH --error=logs/calm_causalgate_%j.err
 #SBATCH --time=08:00:00
 #SBATCH --partition=gpu
 #SBATCH --nodelist=gpu004
