@@ -22,7 +22,6 @@ from utils.config import load_config
 KEEP_LOGIT = 20.0
 SKIP_LOGIT = -20.0
 CALM_POLICIES = ("calm_softmax", "calm_hidden_state_saturation")
-MOD_POLICIES = ("mod_magnitude_router", "mod_random_router")
 
 
 def set_seed(seed):
@@ -97,15 +96,15 @@ def build_wikitext_loader(config, tokenizer, split, num_samples):
 def evaluate_standard_ppl(model, loader):
     total_nll = 0.0
     total_tokens = 0
-    reset_mod_stats(model)
     for batch in loader:
         batch = {k: v.to(model.device) for k, v in batch.items()}
-        outputs = model(**batch)
+        outputs = model(**batch, use_cache=False)
         labels = batch["labels"]
         token_count = int((labels[:, 1:] != -100).sum().item())
         total_nll += float(outputs.loss.item()) * token_count
         total_tokens += token_count
-    return total_nll / total_tokens, math.exp(total_nll / total_tokens), get_mod_saved(model)
+    mean_nll = total_nll / max(total_tokens, 1)
+    return mean_nll, math.exp(mean_nll), 0.0
 
 
 def get_lm_head_logits(model, hidden_states):
@@ -250,90 +249,6 @@ def calibrate_threshold(model, loader, policy, target_saved):
     return threshold, realized_saved
 
 
-def disable_mod(model):
-    if not hasattr(model, "_mod_original_forwards"):
-        return
-    for layer, forward in zip(model.model.layers, model._mod_original_forwards):
-        layer.forward = forward
-    model._mod_enabled = False
-
-
-def reset_mod_stats(model):
-    model._mod_total_tokens = 0.0
-    model._mod_skipped_tokens = 0.0
-
-
-def get_mod_saved(model):
-    if not getattr(model, "_mod_enabled", False):
-        return 0.0
-    total = getattr(model, "_mod_total_tokens", 0.0)
-    skipped = getattr(model, "_mod_skipped_tokens", 0.0)
-    return skipped / max(total, 1.0)
-
-
-def enable_mod(model, router, skip_ratio):
-    disable_mod(model)
-    if not hasattr(model, "_mod_original_forwards"):
-        model._mod_original_forwards = [layer.forward for layer in model.model.layers]
-    reset_mod_stats(model)
-    model._mod_enabled = True
-
-    for layer_idx, layer in enumerate(model.model.layers):
-        original_forward = model._mod_original_forwards[layer_idx]
-
-        def mod_forward(
-            hidden_states,
-            attention_mask=None,
-            position_ids=None,
-            past_key_value=None,
-            output_attentions=False,
-            use_cache=False,
-            cache_position=None,
-            position_embeddings=None,
-            _original_forward=original_forward,
-            **kwargs,
-        ):
-            outputs = _original_forward(
-                hidden_states,
-                attention_mask=attention_mask,
-                position_ids=position_ids,
-                past_key_value=past_key_value,
-                output_attentions=output_attentions,
-                use_cache=use_cache,
-                cache_position=cache_position,
-                position_embeddings=position_embeddings,
-                **kwargs,
-            )
-            full_hidden = outputs[0]
-            batch, seq_len, _ = hidden_states.shape
-            keep_count = max(1, min(seq_len, math.ceil(seq_len * (1.0 - skip_ratio))))
-
-            if router == "mod_magnitude_router":
-                scores = hidden_states.float().norm(dim=-1)
-            elif router == "mod_random_router":
-                scores = torch.rand(batch, seq_len, device=hidden_states.device)
-            else:
-                raise ValueError(f"Unknown MoD router: {router}")
-
-            if attention_mask is not None and attention_mask.dim() == 2:
-                scores = scores.masked_fill(attention_mask <= 0, float("-inf"))
-
-            selected = torch.zeros(batch, seq_len, dtype=torch.bool, device=hidden_states.device)
-            topk = torch.topk(scores, k=keep_count, dim=-1).indices
-            selected.scatter_(1, topk, True)
-            mixed_hidden = torch.where(selected.unsqueeze(-1), full_hidden, hidden_states)
-
-            valid_tokens = attention_mask.bool() if attention_mask is not None and attention_mask.dim() == 2 else torch.ones_like(selected)
-            skipped = (~selected & valid_tokens).sum().item()
-            total = valid_tokens.sum().item()
-            model._mod_skipped_tokens += skipped
-            model._mod_total_tokens += total
-
-            return (mixed_hidden,) + outputs[1:]
-
-        layer.forward = mod_forward
-
-
 def get_hellaswag_context(example):
     ctx = example.get("ctx", "")
     return ctx if ctx else f"{example.get('ctx_a', '')} {example.get('ctx_b', '')}".strip()
@@ -357,7 +272,7 @@ def make_choice_tensors(tokenizer, context, ending, max_length, device):
 
 @torch.no_grad()
 def score_standard_choice(model, tensors):
-    outputs = model(**tensors)
+    outputs = model(**tensors, use_cache=False)
     token_count = int((tensors["labels"][:, 1:] != -100).sum().item())
     return float(outputs.loss.item()) * token_count / max(token_count, 1)
 
@@ -385,7 +300,6 @@ def evaluate_multiple_choice(model, tokenizer, dataset_name, num_samples, max_le
     dataset = dataset.select(range(min(num_samples, len(dataset))))
     correct = 0
     total = 0
-    reset_mod_stats(model)
 
     for example in dataset:
         if dataset_name == "hellaswag":
@@ -413,7 +327,7 @@ def evaluate_multiple_choice(model, tokenizer, dataset_name, num_samples, max_le
         correct += int(min(range(len(scores)), key=lambda idx: scores[idx]) == label)
         total += 1
 
-    return correct / total, correct, total, get_mod_saved(model)
+    return correct / total, correct, total
 
 
 def make_row(policy, target_saved, realized_saved, kept_modules, skipped_modules, threshold, wikitext_nll, wikitext_ppl, hs, piqa, csqa):
@@ -449,7 +363,7 @@ def write_csv(rows, output_path):
 
 
 def print_summary(rows):
-    print("\nCALM / MoD / CausalGate Tradeoff")
+    print("\nCALM / CausalGate Tradeoff")
     print("| policy | target_saved | realized_saved | kept | skipped | threshold | WikiText PPL | HellaSwag | PIQA | CSQA |")
     print("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
     for row in rows:
@@ -464,14 +378,14 @@ def print_summary(rows):
 
 def eval_standard_suite(model, tokenizer, wikitext_loader, args):
     w_nll, w_ppl, w_saved = evaluate_standard_ppl(model, wikitext_loader)
-    hs = evaluate_multiple_choice(model, tokenizer, "hellaswag", args.hellaswag_samples, args.max_length, mode="standard")[:3]
-    piqa = evaluate_multiple_choice(model, tokenizer, "piqa", args.piqa_samples, args.max_length, mode="standard")[:3]
-    csqa = evaluate_multiple_choice(model, tokenizer, "commonsense_qa", args.commonsenseqa_samples, args.max_length, mode="standard")[:3]
+    hs = evaluate_multiple_choice(model, tokenizer, "hellaswag", args.hellaswag_samples, args.max_length, mode="standard")
+    piqa = evaluate_multiple_choice(model, tokenizer, "piqa", args.piqa_samples, args.max_length, mode="standard")
+    csqa = evaluate_multiple_choice(model, tokenizer, "commonsense_qa", args.commonsenseqa_samples, args.max_length, mode="standard")
     return w_nll, w_ppl, w_saved, hs, piqa, csqa
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Compare CALM, MoD, and CausalGate at matched saved-compute budgets.")
+    parser = argparse.ArgumentParser(description="Compare CALM and CausalGate at matched saved-compute budgets.")
     parser.add_argument("--checkpoint-dir", default="outputs/tinyllama_gated")
     parser.add_argument("--target-saved", type=float, nargs="+", default=[0.05, 0.10])
     parser.add_argument("--calibration-samples", type=int, default=32)
@@ -502,13 +416,11 @@ def main():
 
     rows = []
 
-    disable_mod(model)
     apply_all_modules_open(model)
     w_nll, w_ppl, _, hs, piqa, csqa = eval_standard_suite(model, tokenizer, wikitext_loader, args)
     rows.append(make_row("full_model", 0.0, 0.0, num_modules, 0, "", w_nll, w_ppl, hs, piqa, csqa))
 
     for target_saved in args.target_saved:
-        disable_mod(model)
         skipped_modules = max(0, min(num_modules - 1, round(num_modules * target_saved)))
         keep_count = num_modules - skipped_modules
         kept_indices = set(gate_ranked_indices[:keep_count])
@@ -516,26 +428,16 @@ def main():
         w_nll, w_ppl, _, hs, piqa, csqa = eval_standard_suite(model, tokenizer, wikitext_loader, args)
         rows.append(make_row("causalgate_topk_binary", target_saved, skipped_modules / num_modules, keep_count, skipped_modules, "", w_nll, w_ppl, hs, piqa, csqa))
 
-    disable_mod(model)
     apply_all_modules_open(model)
     for policy in CALM_POLICIES:
         for target_saved in args.target_saved:
             threshold, _ = calibrate_threshold(model, calibration_loader, policy, target_saved)
             w_nll, w_ppl, eval_saved = evaluate_calm_ppl(model, wikitext_loader, policy, threshold)
-            hs = evaluate_multiple_choice(model, tokenizer, "hellaswag", args.hellaswag_samples, args.max_length, mode="calm", policy=policy, threshold=threshold)[:3]
-            piqa = evaluate_multiple_choice(model, tokenizer, "piqa", args.piqa_samples, args.max_length, mode="calm", policy=policy, threshold=threshold)[:3]
-            csqa = evaluate_multiple_choice(model, tokenizer, "commonsense_qa", args.commonsenseqa_samples, args.max_length, mode="calm", policy=policy, threshold=threshold)[:3]
+            hs = evaluate_multiple_choice(model, tokenizer, "hellaswag", args.hellaswag_samples, args.max_length, mode="calm", policy=policy, threshold=threshold)
+            piqa = evaluate_multiple_choice(model, tokenizer, "piqa", args.piqa_samples, args.max_length, mode="calm", policy=policy, threshold=threshold)
+            csqa = evaluate_multiple_choice(model, tokenizer, "commonsense_qa", args.commonsenseqa_samples, args.max_length, mode="calm", policy=policy, threshold=threshold)
             rows.append(make_row(policy, target_saved, eval_saved, "", "", threshold, w_nll, w_ppl, hs, piqa, csqa))
 
-    for policy in MOD_POLICIES:
-        for target_saved in args.target_saved:
-            disable_mod(model)
-            apply_all_modules_open(model)
-            enable_mod(model, policy, skip_ratio=target_saved)
-            w_nll, w_ppl, w_saved, hs, piqa, csqa = eval_standard_suite(model, tokenizer, wikitext_loader, args)
-            rows.append(make_row(policy, target_saved, w_saved, "", "", "", w_nll, w_ppl, hs, piqa, csqa))
-
-    disable_mod(model)
     write_csv(rows, args.output_csv)
     print_summary(rows)
     print(f"\nSaved comparison table to {args.output_csv}")
