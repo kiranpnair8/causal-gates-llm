@@ -84,6 +84,13 @@ def load_raw_tinyllama(config):
     return model, tokenizer
 
 
+def load_tokenizer(config):
+    tokenizer = AutoTokenizer.from_pretrained(config["model"]["name"])
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    return tokenizer
+
+
 def tokenize_texts(tokenizer, texts, max_length):
     return [
         tokenizer(text, truncation=True, max_length=max_length, padding=False)
@@ -281,6 +288,16 @@ def split_lambada_text(text):
     return pieces[0], " " + pieces[1]
 
 
+def encode_lambada_context_and_target(tokenizer, context, target, max_length):
+    target_ids = tokenizer(target, add_special_tokens=False)["input_ids"]
+    if not target_ids:
+        return [], []
+    context_ids = tokenizer(context, add_special_tokens=False)["input_ids"]
+    max_context_length = max(1, max_length - len(target_ids))
+    context_ids = context_ids[-max_context_length:]
+    return context_ids, target_ids
+
+
 @torch.no_grad()
 def evaluate_lambada_greedy(runner, texts, max_length):
     runner.model.eval()
@@ -293,8 +310,7 @@ def evaluate_lambada_greedy(runner, texts, max_length):
         context, target = split_lambada_text(text)
         if not context or not target:
             continue
-        context_ids = tokenizer(context, add_special_tokens=False, truncation=True, max_length=max_length)["input_ids"]
-        target_ids = tokenizer(target, add_special_tokens=False)["input_ids"]
+        context_ids, target_ids = encode_lambada_context_and_target(tokenizer, context, target, max_length)
         if not context_ids or not target_ids:
             continue
         generated = []
@@ -505,7 +521,7 @@ def main():
     config = load_config("utils/gate.yaml")
     config["data"]["max_length"] = args.max_length
 
-    _, tokenizer_for_data = load_raw_tinyllama(config)
+    tokenizer_for_data = load_tokenizer(config)
     datasets = prepare_datasets(tokenizer_for_data, args)
     del tokenizer_for_data
     gc.collect()
