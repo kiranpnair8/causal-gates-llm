@@ -45,12 +45,25 @@ def set_seed(seed):
         torch.cuda.manual_seed_all(seed)
 
 
-def load_ptb_texts(split, num_samples):
-    try:
-        dataset = load_dataset("ptb_text_only", "penn_treebank", split=split)
-    except Exception:
-        dataset = load_dataset("penn_treebank", split=split)
+def load_ptb_dataset(split):
+    attempts = [
+        ("ptb_text_only", "penn_treebank", {"trust_remote_code": True}),
+        ("ptb_text_only", None, {"trust_remote_code": True}),
+    ]
+    errors = []
+    for name, config_name, kwargs in attempts:
+        try:
+            if config_name is None:
+                return load_dataset(name, split=split, **kwargs)
+            return load_dataset(name, config_name, split=split, **kwargs)
+        except Exception as exc:
+            label = name if config_name is None else f"{name}/{config_name}"
+            errors.append(f"{label}: {type(exc).__name__}: {exc}")
+    raise RuntimeError("Could not load Penn Treebank. Tried:\n" + "\n".join(errors))
 
+
+def load_ptb_texts(split, num_samples):
+    dataset = load_ptb_dataset(split)
     texts = []
     for example in dataset:
         text = example.get("sentence", example.get("text", "")).strip()
