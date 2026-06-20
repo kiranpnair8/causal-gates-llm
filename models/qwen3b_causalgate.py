@@ -1,5 +1,6 @@
 import argparse
 import csv
+import inspect
 import math
 import random
 import sys
@@ -86,6 +87,8 @@ def get_gate_values_cpu(model):
 
 
 def make_qwen_gated_forward(layer, layer_idx, parent_model):
+    supported_attn_args = set(inspect.signature(layer.self_attn.forward).parameters)
+
     def qwen_gated_forward(
         hidden_states,
         attention_mask=None,
@@ -99,17 +102,19 @@ def make_qwen_gated_forward(layer, layer_idx, parent_model):
     ):
         residual = hidden_states
         hidden_states_norm = layer.input_layernorm(hidden_states)
-        attn_outputs = layer.self_attn(
-            hidden_states=hidden_states_norm,
-            attention_mask=attention_mask,
-            position_ids=position_ids,
-            past_key_value=past_key_value,
-            output_attentions=output_attentions,
-            use_cache=use_cache,
-            cache_position=cache_position,
-            position_embeddings=position_embeddings,
-            **kwargs,
-        )
+        attn_kwargs = {
+            "hidden_states": hidden_states_norm,
+            "attention_mask": attention_mask,
+            "position_ids": position_ids,
+            "past_key_value": past_key_value,
+            "output_attentions": output_attentions,
+            "use_cache": use_cache,
+            "cache_position": cache_position,
+            "position_embeddings": position_embeddings,
+        }
+        attn_kwargs.update(kwargs)
+        attn_kwargs = {key: value for key, value in attn_kwargs.items() if key in supported_attn_args}
+        attn_outputs = layer.self_attn(**attn_kwargs)
         attn_output = attn_outputs[0]
         if getattr(parent_model, "_cg_intervention", None) == (layer_idx, "attn"):
             attn_output = torch.zeros_like(attn_output)
