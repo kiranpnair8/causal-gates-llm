@@ -5,9 +5,9 @@
 #SBATCH --time=48:00:00
 #SBATCH --partition=gpu
 #SBATCH --exclude=gpu001
-#SBATCH --gres=gpu:2
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=96G
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=48G
 #SBATCH --mail-user=kiran.prasannannair@coyotes.usd.edu
 #SBATCH --mail-type=END,FAIL
 
