@@ -1,0 +1,50 @@
+model:
+  name: "meta-llama/Llama-3.1-8B-Instruct"
+  torch_dtype: "float16"
+
+gate:
+  hidden_size: null
+  gate_type: "scalar"
+  init_bias: 0.0
+  init_std: 0.001
+  temperature: 1.0
+
+training:
+  batch_size: 1
+  grad_accum_steps: 8
+  learning_rate: 0.01
+  weight_decay: 0.0
+  adam_eps: 1.0e-6
+  max_steps: 1000
+  max_grad_norm: 1.0
+
+loss:
+  lambda_lm: 1.0
+  lambda_sparsity: 0.001
+
+causal:
+  lambda_causal: 10.0
+  target_floor: 0.25
+  use_ema_targets: true
+  ema_beta: 0.9
+  use_rank_loss: true
+  lambda_rank: 2.0
+  rank_margin: 0.05
+  rank_pairs: 128
+
+data:
+  dataset_name: "wikitext"
+  dataset_config: "wikitext-2-raw-v1"
+  split: "train"
+  eval_split: "test"
+  max_length: 512
+  wikitext_eval_samples: 128
+  c4_eval_samples: 128
+
+system:
+  device_map: "auto"
+  seed: 42
+
+logging:
+  log_every: 50
+  save_dir: "outputs/llama31_8b_causalgate"
