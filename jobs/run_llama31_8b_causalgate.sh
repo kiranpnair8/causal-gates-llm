@@ -4,6 +4,7 @@
 #SBATCH --error=logs/llama31_8b_causalgate_%j.err
 #SBATCH --time=48:00:00
 #SBATCH --partition=gpu
+#SBATCH --exclude=gpu001
 #SBATCH --gres=gpu:2
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=96G
