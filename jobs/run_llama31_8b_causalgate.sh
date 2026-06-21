@@ -27,6 +27,15 @@ fi
 
 conda activate /home/rizk_lab/shared/kiran_m2dn/envs/env_gate
 
+# Keep large model shards and temporary downloads out of the quota-limited
+# home directory while continuing to use the token created by `hf auth login`.
+export HF_TOKEN_PATH="${HF_TOKEN_PATH:-$HOME/.cache/huggingface/token}"
+export HF_HOME="/home/rizk_lab/shared/kiran_m2dn/huggingface_cache"
+export HF_HUB_CACHE="$HF_HOME/hub"
+export TRANSFORMERS_CACHE="$HF_HOME/transformers"
+export TMPDIR="/home/rizk_lab/shared/kiran_m2dn/tmp/$USER"
+mkdir -p "$HF_HUB_CACHE" "$TRANSFORMERS_CACHE" "$TMPDIR"
+
 if [ -z "${HF_TOKEN:-}" ]; then
     echo "HF_TOKEN is not set; relying on a cached Hugging Face login for gated Llama access."
 fi
