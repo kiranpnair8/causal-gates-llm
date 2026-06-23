@@ -237,7 +237,7 @@ def evaluate_budgets(model, config, wikitext_loader, c4_loader, results_csv):
     )
     rows = []
 
-    for target_saved in (0.0, 0.05, 0.10):
+    for target_saved in (0.0, 0.05, 0.10, 0.15, 0.20):
         if target_saved == 0.0:
             num_skipped = 0
             keep_count = num_modules
