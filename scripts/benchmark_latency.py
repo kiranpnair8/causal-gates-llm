@@ -60,15 +60,58 @@ class TrueModuleBypass:
         original_forward = module.forward
         self.original_forwards[module] = original_forward
         return_count = attention_return_count(layer_forward)
+        forward_signature = inspect.signature(original_forward)
 
         def bypass_forward(_module, *args, **kwargs):
-            hidden_states = kwargs.get("hidden_states")
-            if hidden_states is None:
-                hidden_states = args[0]
+            bound = forward_signature.bind_partial(*args, **kwargs)
+            call_args = bound.arguments
+            hidden_states = call_args["hidden_states"]
             output = torch.zeros_like(hidden_states)
+            past_key_value = call_args.get("past_key_value")
+            use_cache = bool(call_args.get("use_cache", False))
+
+            if use_cache and past_key_value is not None:
+                batch_size, query_length, hidden_size = hidden_states.shape
+                num_kv_heads = getattr(_module, "num_key_value_heads", None)
+                if num_kv_heads is None:
+                    num_kv_heads = _module.config.num_key_value_heads
+                head_dim = getattr(_module, "head_dim", None)
+                if head_dim is None:
+                    head_dim = hidden_size // int(_module.config.num_attention_heads)
+                num_kv_heads = int(num_kv_heads)
+                head_dim = int(head_dim)
+                zero_key = hidden_states.new_zeros(
+                    batch_size,
+                    num_kv_heads,
+                    query_length,
+                    head_dim,
+                )
+                zero_value = torch.zeros_like(zero_key)
+
+                if hasattr(past_key_value, "update"):
+                    cache_kwargs = {}
+                    cache_position = call_args.get("cache_position")
+                    if cache_position is not None:
+                        cache_kwargs["cache_position"] = cache_position
+                    position_embeddings = call_args.get("position_embeddings")
+                    if position_embeddings is not None:
+                        cache_kwargs["cos"] = position_embeddings[0]
+                        cache_kwargs["sin"] = position_embeddings[1]
+                    past_key_value.update(
+                        zero_key,
+                        zero_value,
+                        _module.layer_idx,
+                        cache_kwargs,
+                    )
+                elif isinstance(past_key_value, tuple):
+                    if len(past_key_value) == 2 and past_key_value[0] is not None:
+                        zero_key = torch.cat((past_key_value[0], zero_key), dim=-2)
+                        zero_value = torch.cat((past_key_value[1], zero_value), dim=-2)
+                    past_key_value = (zero_key, zero_value)
+
             if return_count <= 2:
                 return output, None
-            return output, None, kwargs.get("past_key_value")
+            return output, None, past_key_value
 
         module.forward = MethodType(bypass_forward, module)
 
