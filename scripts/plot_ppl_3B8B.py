@@ -6,16 +6,16 @@ from matplotlib.ticker import PercentFormatter
 
 MODEL_RESULTS = {
     "Qwen2.5-3B-Instruct": {
-        "realized_saved": [0.0, 0.0555555556, 0.0972222222, 0.1527777778, 0.1944444444],
         "WikiText-2": [12.8647086271, 14.2489521245, 16.4551832410, 20.7643413074, 25.6129328318],
         "C4": [13.5483084892, 14.8408401565, 16.7741724585, 20.0804266215, 23.3878558872],
     },
     "Llama-3.1-8B-Instruct": {
-        "realized_saved": [0.0, 0.046875, 0.09375, 0.15625, 0.203125],
         "WikiText-2": [12.8769247094, 15.3134811605, 15.9816387654, 21.4861012971, 29.4471135473],
         "C4": [10.9479760910, 12.7358311112, 13.4328467977, 17.6909408676, 22.4697410870],
     },
 }
+
+TARGET_REMOVAL = [0.0, 0.05, 0.10, 0.15, 0.20]
 
 DATASET_STYLES = {
     "WikiText-2": {
@@ -30,7 +30,7 @@ DATASET_STYLES = {
 
 
 def plot_panel(ax, panel_label, model_name, results):
-    x = results["realized_saved"]
+    x = TARGET_REMOVAL
 
     for dataset_name, style in DATASET_STYLES.items():
         ax.plot(
@@ -47,7 +47,7 @@ def plot_panel(ax, panel_label, model_name, results):
         )
 
     ax.set_title(f"{panel_label} {model_name}", pad=7, fontweight="semibold")
-    ax.set_xlabel("Realized Module Removal (%)")
+    ax.set_xlabel("Target Module Removal (%)")
     ax.set_ylabel("Perplexity (PPL)")
     ax.xaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
     ax.set_xticks(x)
