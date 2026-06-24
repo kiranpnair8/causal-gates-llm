@@ -1,67 +1,60 @@
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
+from matplotlib.ticker import PercentFormatter
 
 
-MODELS = ["Qwen2.5-3B", "Llama-3.1-8B"]
-
-WIKITEXT_PPL = {
-    "Full model": [12.864708627112647, 12.876924709440688],
-    "5% module removal": [14.24895212452269, 15.313481160506582],
-    "10% module removal": [16.45518324098659, 15.981638765388565],
+MODEL_RESULTS = {
+    "Qwen2.5-3B-Instruct": {
+        "realized_saved": [0.0, 0.0555555556, 0.0972222222, 0.1527777778, 0.1944444444],
+        "WikiText-2": [12.8647086271, 14.2489521245, 16.4551832410, 20.7643413074, 25.6129328318],
+        "C4": [13.5483084892, 14.8408401565, 16.7741724585, 20.0804266215, 23.3878558872],
+    },
+    "Llama-3.1-8B-Instruct": {
+        "realized_saved": [0.0, 0.046875, 0.09375, 0.15625, 0.203125],
+        "WikiText-2": [12.8769247094, 15.3134811605, 15.9816387654, 21.4861012971, 29.4471135473],
+        "C4": [10.9479760910, 12.7358311112, 13.4328467977, 17.6909408676, 22.4697410870],
+    },
 }
 
-C4_PPL = {
-    "Full model": [13.548308489189528, 10.947976091027526],
-    "5% module removal": [14.84084015654677, 12.735831111167647],
-    "10% module removal": [16.774172458480137, 13.4328467976935],
-}
-
-STYLES = {
-    "Full model": {
-        "color": "#6B7280",
+DATASET_STYLES = {
+    "WikiText-2": {
+        "color": "#2166AC",
         "marker": "o",
-        "linestyle": ":",
-        "linewidth": 1.7,
     },
-    "5% module removal": {
-        "color": "#277DA1",
+    "C4": {
+        "color": "#B2182B",
         "marker": "s",
-        "linestyle": "-",
-        "linewidth": 2.2,
-    },
-    "10% module removal": {
-        "color": "#F3722C",
-        "marker": "^",
-        "linestyle": "-",
-        "linewidth": 2.2,
     },
 }
 
 
-def plot_panel(ax, values, panel_title):
-    x = np.arange(len(MODELS))
-    for label, ppl in values.items():
-        style = STYLES[label]
+def plot_panel(ax, panel_label, model_name, results):
+    x = results["realized_saved"]
+
+    for dataset_name, style in DATASET_STYLES.items():
         ax.plot(
             x,
-            ppl,
-            label=label,
+            results[dataset_name],
+            color=style["color"],
+            marker=style["marker"],
+            linestyle=":",
+            linewidth=2.0,
             markersize=6.5,
-            markeredgecolor="white",
-            markeredgewidth=0.7,
-            **style,
+            markerfacecolor="white",
+            markeredgewidth=1.3,
+            label=dataset_name,
         )
 
-    ax.set_title(panel_title, pad=7, fontweight="semibold")
-    ax.set_xticks(x)
-    ax.set_xticklabels(MODELS)
-    ax.set_xlabel("Model")
+    ax.set_title(f"{panel_label} {model_name}", pad=7, fontweight="semibold")
+    ax.set_xlabel("Realized Module Removal (%)")
     ax.set_ylabel("Perplexity (PPL)")
-    ax.grid(True, axis="both", linestyle="--", linewidth=0.6, alpha=0.45)
+    ax.xaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
+    ax.set_xticks(x)
+    ax.grid(True, linestyle="--", linewidth=0.6, alpha=0.45)
     ax.set_axisbelow(True)
-    ax.margins(x=0.12, y=0.14)
+    ax.legend(loc="upper left", frameon=False)
+    ax.margins(x=0.04, y=0.10)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
 
@@ -70,7 +63,7 @@ def main():
     plt.rcParams.update({
         "font.family": "serif",
         "font.size": 9,
-        "axes.titlesize": 11,
+        "axes.titlesize": 10.5,
         "axes.labelsize": 10,
         "xtick.labelsize": 8.5,
         "ytick.labelsize": 8.5,
@@ -80,20 +73,16 @@ def main():
     })
 
     fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.25))
-    plot_panel(axes[0], WIKITEXT_PPL, "(a) WikiText-2")
-    plot_panel(axes[1], C4_PPL, "(b) C4")
+    panels = ["(a)", "(b)"]
 
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(
-        handles,
-        labels,
-        loc="upper center",
-        bbox_to_anchor=(0.5, 1.02),
-        ncol=3,
-        frameon=False,
-    )
+    for ax, panel_label, (model_name, results) in zip(
+        axes,
+        panels,
+        MODEL_RESULTS.items(),
+    ):
+        plot_panel(ax, panel_label, model_name, results)
 
-    fig.tight_layout(rect=(0, 0, 1, 0.90))
+    fig.tight_layout()
 
     output_dir = Path("figures")
     output_dir.mkdir(parents=True, exist_ok=True)
