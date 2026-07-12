@@ -4,7 +4,7 @@
 #SBATCH --error=logs/gateskip_style_%j.err
 #SBATCH --time=08:00:00
 #SBATCH --partition=gpu
-#SBATCH --nodelist=gpu005
+#SBATCH --nodelist=gpu004
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
@@ -28,7 +28,7 @@ fi
 conda activate /home/rizk_lab/shared/kiran_m2dn/envs/env_gate
 
 python scripts/eval_gateskip_style.py \
-    --target-saved 0.05 0.10 \
+    --target-saved 0.05 0.10 0.20 0.30 0.40 \
     --train-steps 1000 \
     --train-samples 2048 \
     --batch-size 1 \

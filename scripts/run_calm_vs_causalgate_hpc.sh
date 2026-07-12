@@ -4,7 +4,7 @@
 #SBATCH --error=logs/calm_causalgate_%j.err
 #SBATCH --time=08:00:00
 #SBATCH --partition=gpu
-#SBATCH --nodelist=gpu004
+#SBATCH --nodelist=gpu003
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
