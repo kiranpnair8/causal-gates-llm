@@ -387,7 +387,7 @@ def eval_standard_suite(model, tokenizer, wikitext_loader, args):
 def main():
     parser = argparse.ArgumentParser(description="Compare CALM and CausalGate at matched saved-compute budgets.")
     parser.add_argument("--checkpoint-dir", default="outputs/tinyllama_gated")
-    parser.add_argument("--target-saved", type=float, nargs="+", default=[0.05, 0.10])
+    parser.add_argument("--target-saved", type=float, nargs="+", default=[0.05, 0.10, 0.20, 0.30, 0.40])
     parser.add_argument("--calibration-samples", type=int, default=32)
     parser.add_argument("--wikitext-samples", type=int, default=128)
     parser.add_argument("--hellaswag-samples", type=int, default=256)

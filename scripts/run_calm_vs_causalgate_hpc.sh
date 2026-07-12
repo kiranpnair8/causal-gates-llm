@@ -29,7 +29,7 @@ conda activate /home/rizk_lab/shared/kiran_m2dn/envs/env_gate
 
 python scripts/eval_calm_vs_causalgate.py \
     --checkpoint-dir outputs/tinyllama_gated \
-    --target-saved 0.05 0.10 \
+    --target-saved 0.05 0.10 0.20 0.30 0.40 \
     --calibration-samples 32 \
     --wikitext-samples 128 \
     --hellaswag-samples 256 \
