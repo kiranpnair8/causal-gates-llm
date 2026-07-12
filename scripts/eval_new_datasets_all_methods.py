@@ -506,7 +506,7 @@ def main():
     parser.add_argument("--checkpoint-dir", default="outputs/tinyllama_gated")
     parser.add_argument("--gateskip-checkpoint", default="outputs/gateskip_style_gates.pt")
     parser.add_argument("--adaskip-ranking", default="outputs/adaskip_style_io_similarity_ranking.csv")
-    parser.add_argument("--target-saved", type=float, nargs="+", default=[0.05, 0.10])
+    parser.add_argument("--target-saved", type=float, nargs="+", default=[0.05, 0.10, 0.20, 0.30, 0.40])
     parser.add_argument("--calibration-samples", type=int, default=32)
     parser.add_argument("--openbookqa-samples", type=int, default=500)
     parser.add_argument("--winogrande-samples", type=int, default=500)

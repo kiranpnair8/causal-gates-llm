@@ -28,7 +28,7 @@ fi
 conda activate /home/rizk_lab/shared/kiran_m2dn/envs/env_gate
 
 python scripts/eval_new_datasets_all_methods.py \
-    --target-saved 0.05 0.10 \
+    --target-saved 0.05 0.10 0.20 0.30 0.40 \
     --calibration-samples 32 \
     --openbookqa-samples 500 \
     --winogrande-samples 500 \
