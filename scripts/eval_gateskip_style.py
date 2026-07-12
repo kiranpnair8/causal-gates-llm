@@ -421,7 +421,7 @@ def print_summary(rows):
 
 def main():
     parser = argparse.ArgumentParser(description="Train and evaluate a standalone GateSkip-style residual gating baseline.")
-    parser.add_argument("--target-saved", type=float, nargs="+", default=[0.05, 0.10])
+    parser.add_argument("--target-saved", type=float, nargs="+", default=[0.05, 0.10, 0.20, 0.30, 0.40])
     parser.add_argument("--train-samples", type=int, default=2048)
     parser.add_argument("--train-steps", type=int, default=1000)
     parser.add_argument("--batch-size", type=int, default=1)
