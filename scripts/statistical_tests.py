@@ -60,6 +60,299 @@ BENCHMARK_ALIASES = {
     "C4": "c4",
 }
 
+# Aggregate benchmark values from the paper table. These are useful for
+# audit/context only; the script must not run significance tests from them.
+EMBEDDED_AGGREGATE_RESULTS = {
+    ("full_model", 0.00): {
+        "wikitext": 13.58,
+        "c4": 9.89,
+        "hellaswag": 0.484,
+        "piqa": 0.707,
+        "csqa": 0.367,
+        "winogrande": 0.540,
+    },
+    ("causalgate", 0.05): {
+        "wikitext": 16.00,
+        "c4": 10.84,
+        "hellaswag": 0.445,
+        "piqa": 0.723,
+        "csqa": 0.359,
+        "winogrande": 0.540,
+    },
+    ("calm_softmax", 0.05): {
+        "wikitext": 32.33,
+        "c4": 20.85,
+        "hellaswag": 0.383,
+        "piqa": 0.664,
+        "csqa": 0.320,
+        "winogrande": 0.524,
+    },
+    ("calm_hidden_state", 0.05): {
+        "wikitext": 23.11,
+        "c4": 28.97,
+        "hellaswag": 0.453,
+        "piqa": 0.734,
+        "csqa": 0.313,
+        "winogrande": 0.540,
+    },
+    ("mod", 0.05): {
+        "wikitext": 25.04,
+        "c4": 16.00,
+        "hellaswag": 0.484,
+        "piqa": 0.648,
+        "csqa": 0.359,
+        "winogrande": 0.516,
+    },
+    ("gateskip", 0.05): {
+        "wikitext": 14.71,
+        "c4": 16.12,
+        "hellaswag": 0.461,
+        "piqa": 0.684,
+        "csqa": 0.313,
+        "winogrande": 0.540,
+    },
+    ("adaskip", 0.05): {
+        "wikitext": 27.08,
+        "c4": 26.42,
+        "hellaswag": 0.406,
+        "piqa": 0.633,
+        "csqa": 0.273,
+        "winogrande": 0.510,
+    },
+    ("act_norm", 0.05): {
+        "wikitext": 25.26,
+        "c4": 19.59,
+        "hellaswag": 0.359,
+        "piqa": 0.606,
+        "csqa": 0.301,
+        "winogrande": 0.520,
+    },
+    ("causalgate", 0.10): {
+        "wikitext": 18.46,
+        "c4": 12.84,
+        "hellaswag": 0.410,
+        "piqa": 0.715,
+        "csqa": 0.332,
+        "winogrande": 0.506,
+    },
+    ("calm_softmax", 0.10): {
+        "wikitext": 71.96,
+        "c4": 48.35,
+        "hellaswag": 0.383,
+        "piqa": 0.648,
+        "csqa": 0.297,
+        "winogrande": 0.522,
+    },
+    ("calm_hidden_state", 0.10): {
+        "wikitext": 46.43,
+        "c4": 70.59,
+        "hellaswag": 0.391,
+        "piqa": 0.641,
+        "csqa": 0.281,
+        "winogrande": 0.538,
+    },
+    ("mod", 0.10): {
+        "wikitext": 60.29,
+        "c4": 40.75,
+        "hellaswag": 0.406,
+        "piqa": 0.605,
+        "csqa": 0.336,
+        "winogrande": 0.492,
+    },
+    ("gateskip", 0.10): {
+        "wikitext": 22.43,
+        "c4": 27.34,
+        "hellaswag": 0.441,
+        "piqa": 0.613,
+        "csqa": 0.293,
+        "winogrande": 0.518,
+    },
+    ("adaskip", 0.10): {
+        "wikitext": 40.40,
+        "c4": 43.75,
+        "hellaswag": 0.410,
+        "piqa": 0.602,
+        "csqa": 0.246,
+        "winogrande": 0.514,
+    },
+    ("act_norm", 0.10): {
+        "wikitext": 81.11,
+        "c4": 161.86,
+        "hellaswag": 0.262,
+        "piqa": 0.512,
+        "csqa": 0.234,
+        "winogrande": 0.490,
+    },
+    ("causalgate", 0.20): {
+        "wikitext": 67.0,
+        "c4": 40.0,
+        "hellaswag": 0.340,
+        "piqa": 0.610,
+        "csqa": 0.260,
+        "winogrande": 0.490,
+    },
+    ("calm_softmax", 0.20): {
+        "wikitext": 198.0,
+        "c4": 141.0,
+        "hellaswag": 0.350,
+        "piqa": 0.610,
+        "csqa": 0.300,
+        "winogrande": 0.510,
+    },
+    ("calm_hidden_state", 0.20): {
+        "wikitext": 80.0,
+        "c4": 130.0,
+        "hellaswag": 0.370,
+        "piqa": 0.590,
+        "csqa": 0.250,
+        "winogrande": 0.520,
+    },
+    ("mod", 0.20): {
+        "wikitext": 407.0,
+        "c4": 269.0,
+        "hellaswag": 0.310,
+        "piqa": 0.510,
+        "csqa": 0.260,
+        "winogrande": 0.520,
+    },
+    ("gateskip", 0.20): {
+        "wikitext": 81.0,
+        "c4": 100.0,
+        "hellaswag": 0.320,
+        "piqa": 0.550,
+        "csqa": 0.260,
+        "winogrande": 0.480,
+    },
+    ("adaskip", 0.20): {
+        "wikitext": 1816.0,
+        "c4": 531.0,
+        "hellaswag": 0.246,
+        "piqa": 0.554,
+        "csqa": 0.200,
+        "winogrande": 0.490,
+    },
+    ("act_norm", 0.20): {
+        "wikitext": 2781.6,
+        "c4": 1085.0,
+        "hellaswag": 0.273,
+        "piqa": 0.535,
+        "csqa": 0.231,
+        "winogrande": 0.510,
+    },
+    ("causalgate", 0.30): {
+        "wikitext": 116.0,
+        "c4": 69.0,
+        "hellaswag": 0.340,
+        "piqa": 0.540,
+        "csqa": 0.250,
+        "winogrande": 0.490,
+    },
+    ("calm_softmax", 0.30): {
+        "wikitext": 601.0,
+        "c4": 422.0,
+        "hellaswag": 0.290,
+        "piqa": 0.600,
+        "csqa": 0.290,
+        "winogrande": 0.500,
+    },
+    ("calm_hidden_state", 0.30): {
+        "wikitext": 185.0,
+        "c4": 299.0,
+        "hellaswag": 0.290,
+        "piqa": 0.600,
+        "csqa": 0.230,
+        "winogrande": 0.520,
+    },
+    ("mod", 0.30): {
+        "wikitext": 1313.0,
+        "c4": 990.0,
+        "hellaswag": 0.250,
+        "piqa": 0.530,
+        "csqa": 0.240,
+        "winogrande": 0.510,
+    },
+    ("gateskip", 0.30): {
+        "wikitext": 365.0,
+        "c4": 491.0,
+        "hellaswag": 0.257,
+        "piqa": 0.520,
+        "csqa": 0.250,
+        "winogrande": 0.470,
+    },
+    ("adaskip", 0.30): {
+        "wikitext": 2064.0,
+        "c4": 623.0,
+        "hellaswag": 0.238,
+        "piqa": 0.539,
+        "csqa": 0.170,
+        "winogrande": 0.490,
+    },
+    ("act_norm", 0.30): {
+        "wikitext": 3563.2,
+        "c4": 3385.3,
+        "hellaswag": 0.238,
+        "piqa": 0.535,
+        "csqa": 0.176,
+        "winogrande": 0.500,
+    },
+    ("causalgate", 0.40): {
+        "wikitext": 1365.0,
+        "c4": 441.0,
+        "hellaswag": 0.280,
+        "piqa": 0.500,
+        "csqa": 0.200,
+        "winogrande": 0.480,
+    },
+    ("calm_softmax", 0.40): {
+        "wikitext": 1574.0,
+        "c4": 1047.0,
+        "hellaswag": 0.280,
+        "piqa": 0.530,
+        "csqa": 0.250,
+        "winogrande": 0.500,
+    },
+    ("calm_hidden_state", 0.40): {
+        "wikitext": 1472.0,
+        "c4": 712.0,
+        "hellaswag": 0.270,
+        "piqa": 0.570,
+        "csqa": 0.220,
+        "winogrande": 0.490,
+    },
+    ("mod", 0.40): {
+        "wikitext": 4433.0,
+        "c4": 3403.0,
+        "hellaswag": 0.260,
+        "piqa": 0.510,
+        "csqa": 0.180,
+        "winogrande": 0.500,
+    },
+    ("gateskip", 0.40): {
+        "wikitext": 1698.0,
+        "c4": 2046.0,
+        "hellaswag": 0.250,
+        "piqa": 0.490,
+        "csqa": 0.200,
+        "winogrande": 0.460,
+    },
+    ("adaskip", 0.40): {
+        "wikitext": 4260.0,
+        "c4": 4509.0,
+        "hellaswag": 0.235,
+        "piqa": 0.527,
+        "csqa": 0.160,
+        "winogrande": 0.460,
+    },
+    ("act_norm", 0.40): {
+        "wikitext": 20825.4,
+        "c4": 31094.0,
+        "hellaswag": 0.254,
+        "piqa": 0.527,
+        "csqa": 0.207,
+        "winogrande": 0.488,
+    },
+}
+
 
 def normalize_method(value):
     return METHOD_ALIASES.get(str(value).strip(), str(value).strip())
@@ -212,6 +505,21 @@ def has_aggregate_outputs(root):
     return [str(path) for path in files]
 
 
+def embedded_aggregate_value(method, budget, benchmark):
+    values = EMBEDDED_AGGREGATE_RESULTS.get((normalize_method(method), normalize_budget(budget)))
+    if not values:
+        return "NA"
+    return values.get(normalize_benchmark(benchmark), "NA")
+
+
+def embedded_aggregate_difference(budget, benchmark, baseline):
+    cg_value = embedded_aggregate_value("causalgate", budget, benchmark)
+    base_value = embedded_aggregate_value(baseline, budget, benchmark)
+    if cg_value == "NA" or base_value == "NA":
+        return "NA"
+    return cg_value - base_value
+
+
 def percentile(values, q):
     if not values:
         return float("nan")
@@ -334,6 +642,11 @@ def holm_bonferroni(rows):
 
 
 def empty_row(budget, benchmark, baseline, test_type, reason, available_data):
+    cg_value = embedded_aggregate_value("causalgate", budget, benchmark)
+    base_value = embedded_aggregate_value(baseline, budget, benchmark)
+    aggregate_diff = embedded_aggregate_difference(budget, benchmark, baseline)
+    ppl_difference = aggregate_diff if benchmark in LM_BENCHMARKS else "NA"
+    mean_difference = aggregate_diff if benchmark in CLASSIFICATION_BENCHMARKS else "NA"
     return {
         "budget": budget,
         "benchmark": benchmark,
@@ -341,10 +654,10 @@ def empty_row(budget, benchmark, baseline, test_type, reason, available_data):
         "test_type": test_type,
         "available_data": available_data,
         "n_pairs": 0,
-        "causalgate_mean": "NA",
-        "baseline_mean": "NA",
-        "mean_difference": "NA",
-        "ppl_difference": "NA",
+        "causalgate_mean": cg_value,
+        "baseline_mean": base_value,
+        "mean_difference": mean_difference,
+        "ppl_difference": ppl_difference,
         "mean_nll_difference": "NA",
         "ci95_low": "NA",
         "ci95_high": "NA",
@@ -441,11 +754,12 @@ def seed_row(budget, benchmark, baseline, cg_records, base_records):
 
 def build_rows(classification, lm_nll, seeds, aggregate_files, args):
     rows = []
-    available_data = "aggregate_only" if aggregate_files else "no_result_files_found"
+    embedded_aggregates_available = bool(EMBEDDED_AGGREGATE_RESULTS)
+    available_data = "aggregate_only" if aggregate_files or embedded_aggregates_available else "no_result_files_found"
     aggregate_note = (
-        "Only aggregate result tables were found; significance tests require paired per-example predictions, "
-        "per-sequence NLL values, or repeated matched seeds."
-        if aggregate_files
+        "Only aggregate result values are available; significance tests require paired per-example predictions, "
+        "per-sequence NLL values, or repeated matched seeds. Aggregate values are reported for audit only."
+        if aggregate_files or embedded_aggregates_available
         else "No per-example, per-sequence, matched-seed, or aggregate result files were found in outputs/ or results/."
     )
     for budget in args.budgets:
@@ -568,7 +882,7 @@ def latex_escape(text):
     )
 
 
-def write_tex(rows, output_path, loaded_files, aggregate_files):
+def write_tex(rows, output_path, loaded_files, aggregate_files, embedded_aggregates_available):
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     ok_rows = [row for row in rows if row["status"] == "ok"]
@@ -592,6 +906,11 @@ def write_tex(rows, output_path, loaded_files, aggregate_files):
                 handle.write(f"Recognized paired input files: {latex_escape(', '.join(loaded_files))}.\\\\\n")
             if aggregate_files:
                 handle.write(f"Aggregate files found: {latex_escape(', '.join(aggregate_files))}.\\\\\n")
+            elif embedded_aggregates_available:
+                handle.write(
+                    "Aggregate benchmark values are embedded in \\texttt{scripts/statistical\\_tests.py} "
+                    "for audit/context only.\\\\\n"
+                )
             else:
                 handle.write("No aggregate result CSV files were found under \\texttt{outputs/} or \\texttt{results/}.\\\\\n")
             handle.write("\\bottomrule\n")
@@ -644,11 +963,12 @@ def main():
     lm_nll, lm_files = load_lm_nll(root)
     seeds, seed_files = load_seed_results(root)
     aggregate_files = has_aggregate_outputs(root)
+    embedded_aggregates_available = bool(EMBEDDED_AGGREGATE_RESULTS)
     loaded_files = classification_files + lm_files + seed_files
 
     rows = build_rows(classification, lm_nll, seeds, aggregate_files, args)
     write_csv(rows, args.output_csv)
-    write_tex(rows, args.output_tex, loaded_files, aggregate_files)
+    write_tex(rows, args.output_tex, loaded_files, aggregate_files, embedded_aggregates_available)
 
     ok_count = sum(row["status"] == "ok" for row in rows)
     print(f"Saved statistical test table to {args.output_csv}")
