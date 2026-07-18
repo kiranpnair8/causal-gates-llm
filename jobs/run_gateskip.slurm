@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=adaskip-style
-#SBATCH --output=logs/adaskip_style_%j.out
-#SBATCH --error=logs/adaskip_style_%j.err
+#SBATCH --job-name=gateskip-style
+#SBATCH --output=logs/gateskip_style_%j.out
+#SBATCH --error=logs/gateskip_style_%j.err
 #SBATCH --time=08:00:00
 #SBATCH --partition=gpu
-#SBATCH --nodelist=gpu005
+#SBATCH --nodelist=gpu004
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
@@ -27,14 +27,21 @@ fi
 
 conda activate /home/rizk_lab/shared/kiran_m2dn/envs/env_gate
 
-python scripts/eval_adaskip_style.py \
+python scripts/eval_gateskip.py \
     --target-saved 0.05 0.10 0.20 0.30 0.40 \
-    --calibration-samples 128 \
+    --train-steps 1000 \
+    --train-samples 2048 \
+    --batch-size 1 \
+    --learning-rate 0.001 \
+    --sparsity-loss-weight 0.01 \
+    --entropy-loss-weight 0.0 \
+    --gate-init-bias 5.0 \
+    --gate-init-std 0.01 \
     --wikitext-samples 128 \
     --hellaswag-samples 256 \
     --piqa-samples 256 \
     --commonsenseqa-samples 256 \
     --max-length 512 \
     --seed 123 \
-    --output-csv outputs/adaskip_style_tradeoff.csv \
-    --ranking-csv outputs/adaskip_style_io_similarity_ranking.csv
+    --save-gates outputs/gateskip_style_gates.pt \
+    --output-csv outputs/gateskip_style_tradeoff.csv
