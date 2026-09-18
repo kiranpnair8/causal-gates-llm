@@ -2,8 +2,11 @@ import argparse
 import csv
 from pathlib import Path
 
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colors import Normalize
 
 
 def load_rows(path):
@@ -144,26 +147,102 @@ def plot_rank_heatmap(rows, metrics, output_base):
     plt.close(fig)
 
 
+def plot_split_rank_heatmap(rows, output_path):
+    sorted_rows = sorted(rows, key=lambda row: row["delta_rank"])
+    if len(sorted_rows) != 44:
+        raise ValueError(f"Expected 44 modules for the split heatmap, found {len(sorted_rows)}")
+
+    matrix = np.asarray(
+        [[row["delta_rank"], row["gate_rank"]] for row in sorted_rows],
+        dtype=float,
+    )
+    norm = Normalize(vmin=1, vmax=max(1, matrix.max()))
+    fig, axes = plt.subplots(1, 2, figsize=(7.6, 5.9))
+    fig.subplots_adjust(left=0.115, right=0.875, bottom=0.09, top=0.91, wspace=0.30)
+
+    for panel_idx, ax in enumerate(axes):
+        start = panel_idx * 22
+        panel_rows = sorted_rows[start:start + 22]
+        panel_matrix = matrix[start:start + 22]
+        image = ax.imshow(panel_matrix, cmap="viridis_r", norm=norm, aspect="auto")
+        ax.set_title(
+            "(a) KL ranks 1--22" if panel_idx == 0 else "(b) KL ranks 23--44",
+            fontsize=10,
+            pad=7,
+        )
+        ax.set_xticks([0, 1], labels=["KL Rank", "Gate Rank"])
+        ax.tick_params(axis="x", labelsize=8, length=0, pad=5)
+        ax.set_yticks(np.arange(22), labels=[row["module"] for row in panel_rows])
+        ax.tick_params(axis="y", labelsize=8, length=0, pad=5)
+
+        for local_idx, label in enumerate(ax.get_yticklabels()):
+            global_idx = start + local_idx
+            if global_idx < 10:
+                label.set_fontweight("bold")
+                label.set_color("#006400")
+            elif global_idx >= 34:
+                label.set_fontweight("bold")
+                label.set_color("#8b0000")
+
+        ax.set_xticks(np.arange(-0.5, 2, 1), minor=True)
+        ax.set_yticks(np.arange(-0.5, 22, 1), minor=True)
+        ax.grid(which="minor", color="white", linewidth=0.7)
+        ax.tick_params(which="minor", bottom=False, left=False)
+
+        for row_idx in range(22):
+            for col_idx in range(2):
+                value = int(round(panel_matrix[row_idx, col_idx]))
+                red, green, blue, _ = image.cmap(image.norm(value))
+                luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+                ax.text(
+                    col_idx,
+                    row_idx,
+                    str(value),
+                    ha="center",
+                    va="center",
+                    fontsize=8,
+                    color="black" if luminance > 0.5 else "white",
+                    fontweight="bold" if start + row_idx < 10 or start + row_idx >= 34 else "normal",
+                )
+
+    colorbar_ax = fig.add_axes([0.91, 0.12, 0.018, 0.75])
+    colorbar = fig.colorbar(image, cax=colorbar_ax)
+    colorbar.set_label("Rank (1 = highest importance)", fontsize=9)
+    colorbar.ax.tick_params(labelsize=8)
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Plot learned gate rank against causal KL rank as a heatmap.")
     parser.add_argument("--input-csv", default="outputs/gate_causal_correlation.csv")
     parser.add_argument("--figure-dir", default="figures")
+    parser.add_argument("--split-output", default="Figures/gate_rank_heatmap_split.png")
+    parser.add_argument("--original", action="store_true", help="Also regenerate the original single-panel figure.")
     args = parser.parse_args()
 
     rows = load_rows(args.input_csv)
     metrics = compute_metrics(rows)
 
-    figure_dir = Path(args.figure_dir)
-    figure_dir.mkdir(parents=True, exist_ok=True)
-    output_base = figure_dir / "gate_rank_heatmap"
-    plot_rank_heatmap(rows, metrics, output_base)
+    if args.original:
+        figure_dir = Path(args.figure_dir)
+        figure_dir.mkdir(parents=True, exist_ok=True)
+        output_base = figure_dir / "gate_rank_heatmap"
+        plot_rank_heatmap(rows, metrics, output_base)
+
+    plot_split_rank_heatmap(rows, args.split_output)
 
     print(f"Pearson: {metrics['pearson']:.4f}")
     print(f"Spearman: {metrics['spearman']:.4f}")
     print(f"Top-10 overlap: {metrics['top_overlap']}/10")
     print(f"Bottom-10 overlap: {metrics['bottom_overlap']}/10")
-    print(f"Saved {output_base}.png")
-    print(f"Saved {output_base}.pdf")
+    if args.original:
+        print(f"Saved {output_base}.png")
+        print(f"Saved {output_base}.pdf")
+    print(f"Saved {args.split_output}")
 
 
 if __name__ == "__main__":
