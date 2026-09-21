@@ -1,5 +1,6 @@
 import argparse
-import csv
+import math
+import re
 from pathlib import Path
 
 import matplotlib
@@ -8,30 +9,65 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import Normalize
 
+from canonical_kl import CANONICAL_CSV, load_canonical_kl
 
-def load_rows(path):
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"Input CSV not found: {path}")
 
-    rows = []
-    with path.open("r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        required = {"module", "gate", "delta", "gate_rank", "delta_rank"}
-        if reader.fieldnames is None or not required.issubset(reader.fieldnames):
-            raise ValueError(f"{path} must contain columns: {', '.join(sorted(required))}")
+GATE_KEY_RE = re.compile(r"(?:^|\.)model\.layers\.(\d+)\.(attn|mlp)_gate\.gate_logit$")
 
-        for row in reader:
-            rows.append({
-                "module": row["module"],
-                "gate": float(row["gate"]),
-                "delta": float(row["delta"]),
-                "gate_rank": float(row["gate_rank"]),
-                "delta_rank": float(row["delta_rank"]),
-            })
 
-    if not rows:
-        raise ValueError(f"No rows found in {path}")
+def load_gate_values(checkpoint_dir):
+    import torch
+
+    checkpoint_dir = Path(checkpoint_dir)
+    safetensors_path = checkpoint_dir / "model.safetensors"
+    bin_path = checkpoint_dir / "pytorch_model.bin"
+    if safetensors_path.exists():
+        from safetensors import safe_open
+
+        with safe_open(str(safetensors_path), framework="pt", device="cpu") as handle:
+            gate_tensors = {key: handle.get_tensor(key) for key in handle.keys() if GATE_KEY_RE.search(key)}
+    elif bin_path.exists():
+        state = torch.load(bin_path, map_location="cpu", weights_only=True)
+        gate_tensors = {key: value for key, value in state.items() if GATE_KEY_RE.search(key)}
+    else:
+        raise FileNotFoundError(f"No trained gate checkpoint in {checkpoint_dir}")
+
+    values = {}
+    for key, tensor in gate_tensors.items():
+        match = GATE_KEY_RE.search(key)
+        module = f"L{int(match[1]):02d}.{match[2]}"
+        if module in values or tensor.numel() != 1:
+            raise ValueError(f"Duplicate or non-scalar gate for {module}")
+        values[module] = float(torch.sigmoid(tensor.float()).item())
+        if not math.isfinite(values[module]):
+            raise ValueError(f"Non-finite gate for {module}")
+    return values
+
+
+def load_rows(path, checkpoint_dir):
+    # Figure 2 uses independent all-open KL, not a trained-soft-gated scan.
+    canonical = load_canonical_kl(path)
+    gates = load_gate_values(checkpoint_dir)
+    expected = {row["module"] for row in canonical}
+    if set(gates) != expected:
+        raise ValueError(f"Checkpoint gate modules do not match canonical KL: missing={expected - set(gates)}, extra={set(gates) - expected}")
+    gate_ranks = {
+        module: rank for rank, module in enumerate(sorted(gates, key=lambda name: (-gates[name], name)), 1)
+    }
+    rows = [
+        {"module": row["module"], "gate": gates[row["module"]],
+         "delta": row["mean_kl"], "gate_rank": gate_ranks[row["module"]],
+         "delta_rank": row["kl_rank"]}
+        for row in canonical
+    ]
+    ranks_from_values = {
+        row["module"]: rank for rank, row in enumerate(sorted(canonical, key=lambda row: (-row["mean_kl"], row["module"])), 1)
+    }
+    if any(row["delta_rank"] != ranks_from_values[row["module"]] for row in rows):
+        raise AssertionError("Figure 2 KL ranks disagree with Figure 7 mean KL values")
+    print("All 44 Figure 2 KL ranks match Figure 7 mean KL values")
+    l19 = next(row for row in rows if row["module"] == "L19.mlp")
+    print(f"L19.mlp mean_kl={l19['delta']:.17g} kl_rank={l19['delta_rank']}")
     return rows
 
 
@@ -218,13 +254,14 @@ def plot_split_rank_heatmap(rows, output_path):
 
 def main():
     parser = argparse.ArgumentParser(description="Plot learned gate rank against causal KL rank as a heatmap.")
-    parser.add_argument("--input-csv", default="outputs/gate_causal_correlation.csv")
+    parser.add_argument("--input-csv", default=CANONICAL_CSV)
+    parser.add_argument("--checkpoint-dir", default="outputs/tinyllama_gated")
     parser.add_argument("--figure-dir", default="figures")
-    parser.add_argument("--split-output", default="Figures/gate_rank_heatmap_split.png")
+    parser.add_argument("--split-output", default="figures/gate_rank_heatmap_split.png")
     parser.add_argument("--original", action="store_true", help="Also regenerate the original single-panel figure.")
     args = parser.parse_args()
 
-    rows = load_rows(args.input_csv)
+    rows = load_rows(args.input_csv, args.checkpoint_dir)
     metrics = compute_metrics(rows)
 
     if args.original:

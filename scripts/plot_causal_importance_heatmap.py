@@ -1,12 +1,12 @@
 import argparse
-import csv
-import math
 import re
 from pathlib import Path
 
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
+
+from canonical_kl import CANONICAL_CSV, load_canonical_kl
 
 
 MODULE_RE = re.compile(r"^L(?P<layer>\d+)\.(?P<kind>attn|mlp)$")
@@ -15,41 +15,13 @@ ROW_LABELS = ["Attention", "MLP"]
 
 
 def load_kl_scores(path):
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"Input CSV not found: {path}")
-
-    rows = []
-    with path.open("r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        if reader.fieldnames is None or "module" not in reader.fieldnames:
-            raise ValueError(f"{path} must contain a 'module' column")
-
-        value_col = None
-        for candidate in ("kl_delta", "delta", "kl", "kl_score", "importance"):
-            if candidate in reader.fieldnames:
-                value_col = candidate
-                break
-        if value_col is None:
-            raise ValueError(
-                f"{path} must contain one KL column: kl_delta, delta, kl, kl_score, or importance"
-            )
-
-        for row in reader:
-            module = row["module"].strip()
-            match = MODULE_RE.match(module)
-            if match is None:
-                continue
-            rows.append({
-                "module": module,
-                "layer": int(match.group("layer")),
-                "kind": match.group("kind"),
-                "kl": float(row[value_col]),
-            })
-
-    if not rows:
-        raise ValueError(f"No TinyLlama module rows found in {path}")
-    return rows
+    # Figure 7 uses the same independent all-open scan as Figure 2, not
+    # CausalGate's evolving soft-gated training targets.
+    return [
+        {"module": row["module"], "layer": row["layer"],
+         "kind": row["module_type"], "kl": row["mean_kl"]}
+        for row in load_canonical_kl(path)
+    ]
 
 
 def build_heatmap(rows):
@@ -213,7 +185,7 @@ def print_summary(rows):
 
 def main():
     parser = argparse.ArgumentParser(description="Plot TinyLlama module-level causal importance heatmap.")
-    parser.add_argument("--input-csv", default="outputs/oracle_kl_module_ranking.csv")
+    parser.add_argument("--input-csv", default=CANONICAL_CSV)
     parser.add_argument("--figure-dir", default="figures")
     parser.add_argument("--no-logscale", action="store_true")
     args = parser.parse_args()
