@@ -26,8 +26,20 @@ fi
 
 conda activate /home/rizk_lab/shared/kiran_m2dn/envs/env_gate
 
+extra_args=()
+if [ "${DIAGNOSE_ONLY:-0}" = "1" ]; then
+    extra_args+=(--diagnose-only)
+fi
+if [ "${RANDOM_SUBSETS:-100}" = "100" ] && [ "${DIAGNOSE_ONLY:-0}" != "1" ] && [ -z "${VERIFY_AGAINST:-}" ]; then
+    VERIFY_AGAINST=outputs/joint_intervention_diagnostic_100_metadata.json
+fi
+if [ -n "${VERIFY_AGAINST:-}" ]; then
+    extra_args+=(--verify-against "$VERIFY_AGAINST")
+fi
+
 python scripts/eval_joint_intervention_analysis.py \
     --checkpoint-dir outputs/tinyllama_gated \
     --canonical-csv outputs/canonical_allopen_kl_tinyllama.csv \
     --seed 123 \
-    --random-subsets "${RANDOM_SUBSETS:-100}"
+    --random-subsets "${RANDOM_SUBSETS:-100}" \
+    "${extra_args[@]}"
