@@ -4,7 +4,7 @@
 #SBATCH --error=logs/joint_intervention_%j.err
 #SBATCH --time=12:00:00
 #SBATCH --partition=gpu
-#SBATCH --nodelist=gpu005
+#SBATCH --nodelist=gpu002
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=48G
@@ -24,7 +24,7 @@ elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
     source "$HOME/anaconda3/etc/profile.d/conda.sh"
 fi
 
-conda activate /home/rizk_lab/shared/kiran_m2dn/envs/env_gate
+conda activate /home/rizk_lab/shared/kiran/envs/env_gate
 
 extra_args=()
 if [ "${DIAGNOSE_ONLY:-0}" = "1" ]; then
