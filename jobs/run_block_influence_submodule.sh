@@ -24,7 +24,7 @@ elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
     source "$HOME/anaconda3/etc/profile.d/conda.sh"
 fi
 
-conda activate /home/rizk_lab/shared/kiran_m2dn/envs/env_gate
+conda activate /home/rizk_lab/shared/kiran/envs/env_gate
 
 python scripts/eval_block_influence_submodule.py \
     --target-saved 0.05 0.10 0.20 0.30 0.40 \
