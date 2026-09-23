@@ -24,7 +24,7 @@ elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
     source "$HOME/anaconda3/etc/profile.d/conda.sh"
 fi
 
-conda activate /home/rizk_lab/shared/kiran_m2dn/envs/env_gate
+conda activate /home/rizk_lab/shared/kiran/envs/env_gate
 
 python -m training.train_gates \
     --seed 123 \
