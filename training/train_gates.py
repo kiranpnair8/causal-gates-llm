@@ -1,6 +1,11 @@
 import torch
 import random
+import argparse
+import hashlib
+import json
+import subprocess
 import torch.nn.functional as F
+from pathlib import Path
 from datasets import load_dataset
 from torch.utils.data import DataLoader
 from transformers import DataCollatorForLanguageModeling
@@ -203,7 +208,19 @@ def compute_gate_target_corr(gates, targets):
 
 
 def main():
-    seed = int(config.get("system", {}).get("seed", 42))
+    parser = argparse.ArgumentParser(description="Train TinyLlama CausalGate scalars")
+    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--output-dir", default="outputs/tinyllama_gated")
+    parser.add_argument("--save-final-ema", action="store_true")
+    args = parser.parse_args()
+    output_dir = Path(args.output_dir)
+    if args.save_final_ema:
+        if output_dir.resolve() == Path("outputs/tinyllama_gated").resolve():
+            raise ValueError("EMA ablation must not overwrite outputs/tinyllama_gated")
+        if output_dir.exists() and any(output_dir.iterdir()):
+            raise FileExistsError(f"Refusing to overwrite nonempty ablation directory: {output_dir}")
+
+    seed = int(args.seed if args.seed is not None else config.get("system", {}).get("seed", 42))
     set_seed(seed)
     print(f"Using seed={seed}")
 
@@ -380,8 +397,51 @@ def main():
 
     print_gate_rankings(model)
 
-    model.save_pretrained("outputs/tinyllama_gated")
-    tokenizer.save_pretrained("outputs/tinyllama_gated")
+    model.save_pretrained(str(output_dir))
+    tokenizer.save_pretrained(str(output_dir))
+
+    if args.save_final_ema:
+        if not use_ema_targets or ema_targets is None:
+            raise RuntimeError("No final EMA target vector was produced")
+        module_names = get_module_names(model)
+        final_ema = ema_targets.detach().float().cpu().clone()
+        if len(module_names) != 44 or tuple(final_ema.shape) != (44,) or not torch.isfinite(final_ema).all():
+            raise RuntimeError("Expected 44 finite, canonically ordered EMA targets")
+        ema_path = output_dir / "final_ema_targets.pt"
+        torch.save({"module_names": module_names, "ema_targets": final_ema, "seed": seed, "final_step": step}, ema_path)
+
+        checkpoint_path = output_dir / "model.safetensors"
+        if not checkpoint_path.is_file():
+            raise FileNotFoundError(f"Expected saved checkpoint at {checkpoint_path}")
+
+        def sha256_file(path):
+            digest = hashlib.sha256()
+            with path.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(4 * 1024 * 1024), b""):
+                    digest.update(chunk)
+            return digest.hexdigest()
+
+        revision = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=False)
+        metadata = {
+            "seed": seed,
+            "model": config["model"]["name"],
+            "dataset": config["data"],
+            "training": config["training"],
+            "effective_optimizer": {"name": type(optimizer).__name__, "defaults": optimizer.defaults},
+            "loss": config["loss"],
+            "causal": config["causal"],
+            "module_names": module_names,
+            "final_gate_values": get_all_module_gates(model).detach().float().cpu().tolist(),
+            "final_step": step,
+            "batches_seen": step + 1,
+            "optimizer_steps": (step + 1) // grad_accum_steps,
+            "checkpoint": str(checkpoint_path.resolve()),
+            "checkpoint_sha256": sha256_file(checkpoint_path),
+            "final_ema_targets": str(ema_path.resolve()),
+            "final_ema_targets_sha256": sha256_file(ema_path),
+            "git_commit": revision.stdout.strip() if revision.returncode == 0 else None,
+        }
+        (output_dir / "training_metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

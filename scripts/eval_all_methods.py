@@ -17,7 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import torch
 
 from models.load_model import load_tinyllama_with_gates
-from scripts.eval_adaskip_style import add_adaskip_wrappers
+from scripts.eval_adaskip import add_adaskip_wrappers
 from scripts.eval_calm_vs_causalgate import (
     apply_all_modules_open,
     apply_binary_gate_mask,
@@ -43,7 +43,7 @@ from scripts.eval_common import (
     set_seed,
     write_csv,
 )
-from scripts.eval_gateskip_style import (
+from scripts.eval_gateskip import (
     add_gateskip_wrappers,
     get_gateskip_saved,
     load_gates,
