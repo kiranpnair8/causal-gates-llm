@@ -16,6 +16,7 @@ from models.intervention import set_intervention, clear_intervention
 from training.losses import gate_sparsity_loss
 
 from utils.config import load_config
+from utils.cost_profile import cuda_memory, start_timer, stop_timer, write_cost
 
 config = load_config("utils/gate.yaml")
 
@@ -119,7 +120,7 @@ def compute_module_delta(model, batch, original_logits, layer_idx, module):
     )
 
 @torch.no_grad()
-def compute_all_module_deltas(model, batch, original_logits):
+def compute_all_module_deltas(model, batch, original_logits, intervention_counter=None):
     deltas = []
 
     num_layers = len(model.model.layers)
@@ -133,6 +134,8 @@ def compute_all_module_deltas(model, batch, original_logits):
             )
 
             intervened_outputs = model(**batch)
+            if intervention_counter is not None:
+                intervention_counter[0] += 1
             intervened_logits = intervened_outputs.logits.detach()
 
             clear_intervention()
@@ -212,14 +215,22 @@ def main():
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--output-dir", default="outputs/tinyllama_gated")
     parser.add_argument("--save-final-ema", action="store_true")
+    parser.add_argument("--profile-cost", action="store_true")
+    parser.add_argument("--profile-output", type=Path,
+                        default=Path("results/calibration_cost/causalgate_cost.json"))
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
+    if args.profile_cost and args.profile_output.exists():
+        raise FileExistsError(f"Refusing to overwrite cost profile: {args.profile_output}")
+    if args.profile_cost and output_dir.exists() and any(output_dir.iterdir()):
+        raise FileExistsError(f"Profiling requires a fresh checkpoint directory: {output_dir}")
     if args.save_final_ema:
         if output_dir.resolve() == Path("outputs/tinyllama_gated").resolve():
             raise ValueError("EMA ablation must not overwrite outputs/tinyllama_gated")
         if output_dir.exists() and any(output_dir.iterdir()):
             raise FileExistsError(f"Refusing to overwrite nonempty ablation directory: {output_dir}")
 
+    end_to_end_start = start_timer() if args.profile_cost else None
     seed = int(args.seed if args.seed is not None else config.get("system", {}).get("seed", 42))
     set_seed(seed)
     print(f"Using seed={seed}")
@@ -281,8 +292,16 @@ def main():
 
     avg_gate_grad_norm = 0.0
     ema_targets = None
+    examples_processed = 0
+    batches_processed = 0
+    optimization_steps = 0
+    intervention_counter = [0] if args.profile_cost else None
+    training_start = start_timer(reset_cuda_peak=True) if args.profile_cost else None
 
     for step, batch in enumerate(tqdm(loader)):
+        if args.profile_cost:
+            batches_processed += 1
+            examples_processed += int(batch["input_ids"].shape[0])
         batch = {k: v.to(model.device) for k, v in batch.items()}
 
         clear_intervention()
@@ -295,6 +314,7 @@ def main():
             model,
             batch,
             original_logits,
+            intervention_counter,
         )
 
         normalized_targets = deltas / (deltas.max() + 1e-8)
@@ -367,6 +387,8 @@ def main():
             )
 
             optimizer.step()
+            if args.profile_cost:
+                optimization_steps += 1
             optimizer.zero_grad()
 
         if step % log_every == 0:
@@ -395,6 +417,8 @@ def main():
         if step >= max_steps:
             break
 
+    training_seconds = stop_timer(training_start) if args.profile_cost else None
+    training_memory = cuda_memory() if args.profile_cost else None
     print_gate_rankings(model)
 
     model.save_pretrained(str(output_dir))
@@ -442,6 +466,27 @@ def main():
             "git_commit": revision.stdout.strip() if revision.returncode == 0 else None,
         }
         (output_dir / "training_metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+
+    if args.profile_cost:
+        end_to_end_seconds = stop_timer(end_to_end_start)
+        write_cost(args.profile_output, {
+            "method": "CausalGate",
+            "model": config["model"]["name"],
+            "seed": seed,
+            "output_dir": str(output_dir),
+            "wall_clock_seconds": training_seconds,
+            "wall_clock_minutes": training_seconds / 60,
+            "training_calibration_seconds": training_seconds,
+            "end_to_end_seconds": end_to_end_seconds,
+            "end_to_end_minutes": end_to_end_seconds / 60,
+            "peak_memory_scope": "training/calibration phase after model and data setup",
+            **training_memory,
+            "optimization_steps": optimization_steps,
+            "batches_processed": batches_processed,
+            "examples_processed": examples_processed,
+            "intervention_forward_evals": intervention_counter[0],
+            "reference_forward_evals": batches_processed,
+        })
 
 
 if __name__ == "__main__":

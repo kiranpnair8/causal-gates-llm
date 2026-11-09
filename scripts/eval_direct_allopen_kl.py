@@ -33,6 +33,7 @@ from scripts.eval_oracle_kl_baseline import (
 )
 from scripts.statistical_tests import EMBEDDED_AGGREGATE_RESULTS
 from utils.config import load_config
+from utils.cost_profile import cuda_memory, start_timer, stop_timer, write_cost
 
 
 BUDGETS = {5: 2, 10: 4, 20: 9, 30: 13, 40: 18}
@@ -80,6 +81,10 @@ def parse_args():
     parser.add_argument("--output-dir", type=Path, default=Path("results/direct_allopen_kl"))
     parser.add_argument("--ranking-only", action="store_true",
                         help="Audit and print the ranking without downstream evaluation")
+    parser.add_argument("--profile-cost", action="store_true",
+                        help="Profile the ranking-only calibration procedure")
+    parser.add_argument("--profile-output", type=Path,
+                        default=Path("results/calibration_cost/direct_kl_ranking_cost.json"))
     return parser.parse_args()
 
 
@@ -188,6 +193,10 @@ def write_json(path, payload):
 
 def main():
     args = parse_args()
+    if args.profile_cost and not args.ranking_only:
+        raise ValueError("--profile-cost requires --ranking-only; downstream evaluation is not profiled")
+    if args.profile_cost and args.profile_output.exists():
+        raise FileExistsError(f"Refusing to overwrite cost profile: {args.profile_output}")
     preflight_comparison_schema()
     outputs = {name: args.output_dir / name for name in
                ("ranking.json", "train_calibration.csv", "removed_modules.json",
@@ -195,6 +204,7 @@ def main():
     if any(path.exists() for path in outputs.values()):
         raise FileExistsError("Direct-KL output already exists; refusing to overwrite")
 
+    end_to_end_start = start_timer() if args.profile_cost else None
     config = load_config("utils/gate.yaml")
     if (config["model"]["name"] != "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
             or config["model"]["torch_dtype"] != "float16"
@@ -221,7 +231,11 @@ def main():
     print("Protocol: calibration=WikiText-2/train first 32 filtered examples, batch=1, "
           "seed=123, final-token KL(intervened || all-open), max_length=512")
     print(f"Evaluation: {COUNTS}; max_length=512; seed=123; fp16; budgets={BUDGETS}")
+    ranking_start = start_timer(reset_cuda_peak=True) if args.profile_cost else None
     ranking = train_calibration_scan(model, tokenizer, config)
+    if args.profile_cost:
+        ranking_seconds = stop_timer(ranking_start)
+        ranking_memory = cuda_memory()
     figure2_diagnostic = compare_figure2_diagnostic(ranking, args.canonical_csv)
     removed = {str(pct): {"target_removal_pct": pct, "k": k,
                           "modules": [row["module"] for row in ranking[-k:]]}
@@ -255,6 +269,27 @@ def main():
                           "Binary masks suppress residual outputs after branch computation, so removal is theoretical compute savings."}
     if args.ranking_only:
         print("Ranking audit complete; downstream evaluation not started.")
+        if args.profile_cost:
+            end_to_end_seconds = stop_timer(end_to_end_start)
+            write_cost(args.profile_output, {
+                "method": "Direct-KL",
+                "model": config["model"]["name"],
+                "seed": seed,
+                "calibration_split": "train",
+                "wall_clock_seconds": ranking_seconds,
+                "wall_clock_minutes": ranking_seconds / 60,
+                "ranking_seconds": ranking_seconds,
+                "end_to_end_seconds": end_to_end_seconds,
+                "end_to_end_minutes": end_to_end_seconds / 60,
+                "peak_memory_scope": "32-example all-open ranking phase after model loading",
+                **ranking_memory,
+                "calibration_examples_processed": 32,
+                "module_count": len(ranking),
+                "reference_forward_evals": 32,
+                "intervention_forward_evals": 32 * len(ranking),
+                "total_ranking_forward_evals": 32 * (1 + len(ranking)),
+                "checkpoint_path": checkpoint_info["checkpoint_path"],
+            })
         return
 
     class EvalArgs:
