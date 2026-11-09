@@ -11,3 +11,8 @@ logs/
 *.pt
 *.pth
 *.bin
+
+# Local Slurm allocation/output files
+oomf_gpu*.out
+oomf_gpu*.err
+sleep_gpu*.sh
